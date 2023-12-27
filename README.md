@@ -1,4 +1,4 @@
-These are the scripts used to process the raw sequence data, map to the reference genome, call genotypes, and filter genotypes. 
+These are the scripts used to process the raw sequence data, map to the reference genome, call genotypes, and filter genotypes on the SciNet ATLAS cluster. For more detailed information on the GATK workflow, please see [my other github repo on GATK](https://github.com/renaschweizer/congen-gatk).
 
 #### Make config files
 
