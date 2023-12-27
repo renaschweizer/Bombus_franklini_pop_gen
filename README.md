@@ -50,68 +50,93 @@ ArrayTaskID   FileName
 
 
 #### Run fastqc on raw data. 
+R1 and R2 run separately so array=1-2n where n is # individuals sequenced, assuming one pair of reads per individual.
 
 ```{unix}
 sbatch --array=37-132 --export=species='bombus_affinis' ~/scripts/fastqc_array.slurm
 ```
 
 #### Trim adapters. 
+Array is per individual. 
+
 ```{unix}
 sbatch --array=19-66 --export=species='bombus_affinis' ~/scripts/trimmomatic_array.slurm
 ```
 
 #### Map trimmed reads to reference genome.
+Array is per individual. 
+
 ```{unix}
 sbatch --array=19-66 --export=species='bombus_affinis' ~/scripts/bwa_array.slurm 
 ```
 
 #### Run mapping stats.
+Array is per individual. 
+
 ```{unix}
  sbatch --array=19-66 --export=species='bombus_affinis'  ~/scripts/mapping_stats.slurm
  sbatch --array=19-66 --export=species='bombus_affinis' ~/scripts/qualimap.slurm 
 ```
  
 #### Double check quality of trimmed fastq reads
+R1 and R2 run separately so array=1-2n where n is # individuals sequenced, assuming one pair of reads per individual.
+
 ```{unix}
 sbatch --array=37-132 --export=species='bombus_affinis' ~/scripts/fastqc_array.slurm
 ```
 
 #### AddRG information. 
+Array is per individual.
+
 ```{unix}
 sbatch --array=19-66 --export=species='bombus_affinis' ~/scripts/addRG_array.slurm
 ```
 
 #### Run BQSR from individual bams. I've split up the runs by individual contigs (n=858 total).
+Array is per genome contig.
+
 ```{unix}
 sbatch --array=1-858 --export=species='bombus_affinis' ~/scripts/bqsr_from_ibams_array.slurm
 ```
 
 #### Gather/Apply BQSR results.
+No array.
+
 ```{unix}
 sbatch --export=round=1,species='bombus_affinis' ~/scripts/gather_applybqsr.slurm
 ```
 
 #### Round 2 of BQSR.
+Array is per genome contig.
+
 ```{unix}
 sbatch --array=1-858 --export=species='bombus_affinis' ~/scripts/bqsr_round2_array.slurm
 ```
 
 #### Gather/apply from round 2. 
+No array.
+
 ```{unix}
 sbatch --export=round=2,species='bombus_affinis' ~/scripts/gather_applybqsr.slurm
 ```
 
 #### Call HaplotypeCaller on each individual.
+Array is per individual.
+
 ```{unix}
 sbatch --array=19-66 --export=species='bombus_affinis' ~/scripts/haplotype_caller.slurm
 ```
 
 #### Run GenomicsDBImport in array across contigs.
+Array is per genome contig. 
+
 ```{unix}
 sbatch --array=1-858 --export=species='bombus_affinis' ~/scripts/genomicsDBimport_array.slurm
 ```
 
 #### Genotype GVCFs
+Array is per genome contig. 
+
 ```{unix}
 sbatch --array=1-858 --export=species='bombus_affinis' ~/scripts/genotypeGVCFs.slurm
 ```
