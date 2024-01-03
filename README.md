@@ -141,6 +141,14 @@ Array is per genome contig.
 sbatch --array=1-858 --export=species='bombus_affinis' ~/scripts/genotypeGVCFs.slurm
 ```
 
+#### Filter VCF files. 
+Array is per genome contig. 
+
+```{unix}
+sbatch --array=1-858 --export=species='bombus_affinis' ~/scripts/filter_hc_vcfs.slurm
+sbatch --array=1-858 --export=species='bombus_affinis' ~/scripts/filter_hc_vcfs_monomorphic.slurm 
+```
+
 #### Merge VCF files.
 ```{unix}
 ls filt_SNPs/*.recode.vcf | awk '{print "/90daydata/beenome100/rena_in_progress/bombus_affinis/"$1}' > filt_SNPs/filt_snp_files.txt
