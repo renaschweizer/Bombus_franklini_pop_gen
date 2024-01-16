@@ -142,20 +142,20 @@ sbatch --array=1-858 --export=species='bombus_affinis' ~/scripts/genotypeGVCFs.s
 ```
 
 #### Filter VCF files. 
-Array is per genome contig. 
+Array is per genome contig. Follows GATK Best Practices for hard filtering, plus a min (1/3 mean) and max (2x mean) DP, excess heterozygosity, following Robinson, et al. 2022, Science.
 
 ```{unix}
-sbatch --array=1-858 --export=species='bombus_affinis' ~/scripts/filter_hc_vcfs.slurm
-sbatch --array=1-858 --export=species='bombus_affinis' ~/scripts/filter_hc_vcfs_monomorphic.slurm 
+sbatch --array=1-858 --export=species='bombus_affinis' ~/scripts/filter_hc_vcfs_Robinson.slurm
 ```
 
 #### Merge VCF files.
-```{unix}
-ls filt_SNPs/*.recode.vcf | awk '{print "/90daydata/beenome100/rena_in_progress/bombus_affinis/"$1}' > filt_SNPs/filt_snp_files.txt
-sbatch --export=species='bombus_affinis' ~/scripts/merge_vcfs.slurm
 
-ls filt_all/*.recode.vcf | awk '{print "/90daydata/beenome100/rena_in_progress/bombus_affinis/"$1}' > filt_all/filt_all_files.txt
-sbatch --export=species='bombus_affinis' ~/scripts/merge_vcfs_mono.slurm
+```{unix}
+ls bombus_affinis_HC_geno_PASS_N* > pass_files.list
+ ls bombus_affinis_HC_geno_PASS_variants_N* > pass_variant_files.list
+
+picard MergeVcfs I=pass_files.list O=bombus_affinis_combined_PASS.vcf.gz
+picard MergeVcfs I=pass_variant_files.list O=bombus_affinis_combined_PASS_variants.vcf.gz
 ```
 
 
