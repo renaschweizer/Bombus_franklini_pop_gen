@@ -1,0 +1,1687 @@
+---
+title: "Bombus franklini pop gen analyses"
+output:
+  html_document:
+  date: "`r format(Sys.time(), '%d %B %Y')`"
+  df_print: 
+  pdf_document: default
+root.dir: /Users/rena.schweizer/usda_beelab/projects/bombus_franklini_pop_gen/
+---
+
+First, we'll load libraries and define some functions for colors. 
+
+```{r setup, include=FALSE,echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(tidyverse)
+library(reshape2)
+library(detectRUNS)
+library(dplyr)
+library(tidyr)
+library(knitr)
+library(maps)
+library(plotrix)
+library(dismo)
+library(sf)
+setwd("/Users/rena.schweizer/usda_beelab/projects/bombus_franklini_pop_gen/")
+```
+
+```{r define colors for plots, echo=FALSE}
+plot.point.color = function(category) { # have to list colors and categories alphabetically
+         if (category == "1950") {
+         	return("cornsilk4")
+          } else if (category == "1967") { # # oranges
+             return("darkorange1")
+         } else if (category == "1968" )  { # pink/red, transect 2
+			return("red")
+		 } else if (category == "1969") {
+             return("green2")
+           } else if (category == "1980") {# green, transect 3
+             return("mediumaquamarine")         
+         } else if (category =="1990"  ) { # yellow
+         	return("gold")
+         } else if (category =="1995") { # # blues, transect 4
+         	return("cadetblue1")
+ 		  } else if (category =="1998") { #
+         	return("palevioletred1")	
+        } else 	
+         	return("gray")
+		}	
+```
+
+As a reminder, this is our sampling scheme. We sampled legs from 31 female *Bombus franklini* specimens and performed whole-genome sequencing. 
+
+```{r sampling map, echo=FALSE, out.width='100%', fig.align='center'}
+
+plot.point.size = function(my_size) { # have to list colors and categories alphabetically
+  if (my_size == "5") {
+    return(0.15)
+  } else if (my_size == "4") { # # oranges
+    return(0.1)
+  } else if (my_size == "3") { # # oranges
+    return(0.08)
+  } else if (my_size == "2") { # # oranges
+    return(0.06)
+  } else if (my_size == "1") { # # oranges
+    return(0.04)
+  }
+}
+  
+## load lat/long of all samples
+
+samples <- read.table("sample_info/sample_meta_info_all_records.txt",header=TRUE,sep="\t")
+#gps<-read.table("sample_info/map_info/b_franklini_samples_loc_collapsed.txt",header=TRUE,sep="\t")
+gps<-read.table("sample_info/map_info/b_franklini_samples_loc.txt",header=TRUE,sep="\t")
+
+
+setEPS()
+postscript(file="sample_info/map_info/bfranklini_all_samples_w_sequenced.eps", width=10, height=10,family="Helvetica",pointsize=16)
+
+## http://www.gis-blog.com/r-raster-data-acquisition/
+## https://pakillo.github.io/R-GIS-tutorial/
+
+map("state",region=c("oregon","california"),xlim=c(-125,-120),ylim=c(40,44))
+map.axes(cex.axis=0.8)
+map.scale(cex=1)
+
+# import shapefile of level III ecoregions downloaded here: https://www.epa.gov/eco-research/level-iii-and-iv-ecoregions-continental-united-states
+ eco.regions = st_read("sample_info/us_eco_l3_state_boundaries/us_eco_l3_state_boundaries.shp")
+ #shape <- read_sf(dsn = "sample_info/us_eco_l3_state_boundaries/", layer = "us_eco_l3_state_boundaries")
+ eco.regions <- subset(eco.regions,US_L3CODE=="78")
+eco.regions_reprojected <- st_transform(eco.regions, crs=4326)
+ 
+plot(eco.regions_reprojected$geometry,add=TRUE)
+
+# plot all known specimens
+
+for (x in 1:nrow(samples)) {points(samples$longitude[x],samples$latitude[x],col="gray",pch=16,cex=1)}
+
+# plot sequenced sample locations all same size
+for (x in 1:nrow(gps)) {points(jitter(gps$LonDD[x],0.05),jitter(gps$LatDD[x],0.05),col=sapply(gps$CollectionYr[x], plot.point.color),pch=17,cex=2)}
+garbage <- dev.off()
+
+knitr::include_graphics("sample_info/map_info/Rplot_map_wYear.png")
+
+```
+
+Let's examine some **sequencing metrics** for our data set.
+
+```{r open coverage data, generate histograms, echo=FALSE}
+# open stats data
+stats <- read.table("sequencing_metrics_illumina_element/mapping_stats.txt",head=TRUE)
+
+sample_meta <- read.table("sample_info/sample_meta_info.txt",header=TRUE)
+
+stats_meta <- merge(sample_meta,stats,by.x="SampleID",by.y="Sample")
+
+# coverage
+pdf(file="sequencing_metrics_illumina_element/bfranklini_coverage_hist.pdf")
+hist(stats_meta$meanCov.raw,breaks=25,xlab="Mean Genome Coverage",col="springgreen4",xlim=c(0,100),main="Histogram of Genome-wide Coverage",cex.lab=1.5,cex.axis=1.5,cex.main=1.5)
+garbage <- dev.off()
+
+hist(stats_meta$meanCov.raw,breaks=25,xlab="Mean Genome Coverage",col="springgreen4",xlim=c(0,100),main="Histogram of Genome-wide Coverage",cex.lab=1.5,cex.axis=1.5,cex.main=1.5)
+
+# mapping
+pdf(file="sequencing_metrics_illumina_element/bfranklini_mapping_hist.pdf")
+hist(as.numeric(sub("%","",stats_meta$X.mapped)),breaks=10,xlab="% Mapping Rate",col="dodgerblue1",main="Histogram of Mapping Rate of Filtered Reads",cex.lab=1.5,cex.axis=1.5,cex.main=1.5)
+garbage <- dev.off()
+
+hist(as.numeric(sub("%","",stats_meta$X.mapped)),breaks=10,xlab="% Mapping Rate",col="dodgerblue1",main="Histogram of Mapping Rate of Filtered Reads",cex.lab=1.5,cex.axis=1.5,cex.main=1.5)
+
+# coverage by year
+
+pdf(file="sequencing_metrics_illumina_element/bfranklini_coverage_by_year.pdf")
+ggplot(stats_meta, aes(x=CollectionYr, y=meanCov.raw)) + 
+  geom_point()+
+  geom_smooth(method=lm) + labs(y = "Mean Depth of Coverage (Raw)")
+garbage <- dev.off()
+
+ggplot(stats_meta, aes(x=CollectionYr, y=meanCov.raw)) + 
+  geom_point()+
+  geom_smooth(method=lm) + labs(y = "Mean Depth of Coverage (Raw)")
+
+summary(lm(meanCov.raw ~ CollectionYr,stats_meta))
+
+# raw, cleaned reads by year
+
+pdf(file="sequencing_metrics_illumina_element/bfranklini_reads_by_year.pdf")
+ggplot(stats_meta, aes(x=CollectionYr, y=uniq.MQ20.PR)) + 
+  geom_point()+
+  geom_smooth(method=lm) + labs(y = "Number Unique Paired Mapped Reads MQ>20", x="Collection Year")
+garbage <- dev.off()
+
+ggplot(stats_meta, aes(x=CollectionYr, y=uniq.MQ20.PR)) + 
+  geom_point()+
+  geom_smooth(method=lm) + labs(y = "Number Unique Paired Mapped Reads MQ>20", x="Collection Year")
+
+summary(lm(uniq.MQ20.PR ~ CollectionYr,stats_meta))
+
+# print statistics
+print(paste("The mean number of sequence reads is",round(mean(as.numeric(stats_meta$raw.R1)),0),"with a std dev of",round(sd(as.numeric(stats_meta$raw.R1)),0))) 
+
+print(paste("The mean mapping rate is",round(mean(as.numeric(sub("%","",stats_meta$X.mapped))),0),"% with a std dev of",round(sd(as.numeric(sub("%","",stats_meta$X.mapped))),0),"%"))
+
+print(paste("The mean raw mapping quality is",round(mean(stats_meta$meanMQ.raw),0),"with a std dev of",round(sd(stats_meta$meanMQ.raw),0))) 
+
+print(paste("The mean PCR duplicate removal rate is",round(mean(as.numeric(sub("%","",stats_meta$X.removedPCRdups))),0),"% with a std dev of",round(sd(as.numeric(sub("%","",stats_meta$X.removedPCRdups))),0),"%")) 
+
+print(paste("The mean raw coverage is",round(mean(stats_meta$meanCov.raw),0),"with a std dev of",round(sd(stats_meta$meanCov.raw),0))) 
+
+print(paste("The mean coverage for reads >MQ20 is",round(mean(stats_meta$meanCov.MQ20),0),"with a std dev of",round(sd(stats_meta$meanCov.MQ20),0))) 
+
+print(paste("The mean mapping quality for reads >MQ20 is",round(mean(stats_meta$meanMQ.MQ20),0),"with a std dev of",round(sd(stats_meta$meanMQ.MQ20),0))) 
+
+```
+While we have a range in genome coverage, we should have high-enough coverage to obtain high-quality genotypes. Additionally, despite using the reference genome of a related species (*Bombus affinis*), we have a high mapping rate. 
+
+Next, let's look at statistics between some different filtering data sets. The filter sets are:
+
+1. F1: Sites passing a series of filters detailed in Robinson et al. 2022/GATK Recommended Filters, "PASS"
+2. F2: all individuals (n=31), max missing 75% (i.e., sites with no more than 25% missing)
+3. F3: all individuals (n=31), minDP 15, max missing 75% (i.e., sites with no more than 25% missing), no singletons
+4. F4: quality individuals (n=25), minDP 15, max missing 75% (i.e., sites with no more than 25% missing), no singletons
+5. F5: quality individuals (n=25), minDP 15, no missing data, no singletons
+
+First, we'll look at **individual depth of coverage**.
+
+```{r Filtering exploration: depth, echo=FALSE}
+
+# depth
+depth_1 <- read.table("analysis/stats_vcftools/bombus_franklini_combined_PASS.idepth",header=TRUE)
+depth_2 <- read.table("analysis/stats_vcftools/bombus_franklini_combined_PASS_n31_maxMissing75_noSing.idepth",header=TRUE)
+depth_3 <- read.table("analysis/stats_vcftools/bombus_franklini_combined_PASS_n31_maxMissing75_minDP15_noSing.idepth",header=TRUE)
+depth_4 <- read.table("analysis/stats_vcftools/bombus_franklini_combined_PASS_n25_maxMissing75_minDP15_noSing.idepth",header=TRUE)
+depth_5 <- read.table("analysis/stats_vcftools/bombus_franklini_combined_PASS_n25_maxMissing100_minDP15_noSing.idepth",header=TRUE)
+
+depth_1$myFilter <- c("F1")
+depth_2$myFilter <- c("F2")
+depth_3$myFilter <- c("F3")
+depth_4$myFilter <- c("F4")
+depth_5$myFilter <- c("F5")
+
+depth_all <- rbind(depth_1,depth_2,depth_3,depth_4,depth_5)
+#depth_all$myFilter <- factor(depth_all$myFilter , levels=c("filtered", "filtered, 75%", "filtered, 100%"))
+
+pdf(file="analysis/stats_plots/stats_by_filters_violin_plots_depth.pdf")
+ggplot(data=depth_all, aes(x=myFilter, y=MEAN_DEPTH,col=myFilter)) +
+geom_violin() + geom_jitter(height = 0, width = 0.1) + theme(legend.position="top") + labs(y = "Mean Depth of Coverage")
+garbage <- dev.off()
+
+ggplot(data=depth_all, aes(x=myFilter, y=MEAN_DEPTH,col=myFilter)) +
+geom_violin() + geom_jitter(height = 0, width = 0.1) + theme(legend.position="top") + labs(y = "Mean Depth of Coverage")
+```
+
+Next, we'll look at the fraction of **missing data** per-individual. 
+
+```{r Filtering exploration: missingness, echo=FALSE}
+miss_1 <- read.table("analysis/plink/bombus_franklini_combined_PASS.smiss",header=TRUE)
+miss_2 <- read.table("analysis/plink/bombus_franklini_combined_PASS_n31_maxMissing75_noSing.smiss",header=TRUE)
+miss_3 <- read.table("analysis/plink/bombus_franklini_combined_PASS_n31_maxMissing75_minDP15_noSing.smiss",header=TRUE)
+miss_4 <- read.table("analysis/plink/bombus_franklini_combined_PASS_n25_maxMissing75_minDP15_noSing.smiss",header=TRUE)
+miss_5 <- read.table("analysis/plink/bombus_franklini_combined_PASS_n25_maxMissing100_minDP15_noSing.smiss",header=TRUE)
+  
+miss_1$myFilter <- c("F1")
+miss_2$myFilter <- c("F2")
+miss_3$myFilter <- c("F3")
+miss_4$myFilter <- c("F4")
+miss_5$myFilter <- c("F5")
+
+miss_all <- rbind(miss_1, miss_2, miss_3, miss_4, miss_5)
+#miss_all$filter <- factor(miss_all$filter , levels=c("base", "base, 75%, no sing", "all genotyped sites, 75%, no sing"))
+
+my_labels <- c(paste("F1 (",format(miss_1[1,4],big.mark=",",scientific=FALSE),")",sep=''),paste("F2 (",format(miss_2[1,4],big.mark=",",scientific=FALSE),")",sep=''),paste("F3 (",format(miss_3[1,4],big.mark=",",scientific=FALSE),")",sep=''),paste("F4 (",format(miss_4[1,4],big.mark=",",scientific=FALSE),")",sep=''),paste("F5 (",format(miss_5[1,4],big.mark=",",scientific=FALSE),")",sep=''))
+
+pdf(file="analysis/stats_plots/stats_by_filters_violin_plots_miss.pdf")
+ggplot(data=miss_all, aes(x=myFilter, y=F_MISS,col=myFilter)) +
+ geom_violin() + geom_jitter(height = 0, width = 0.1) + theme(legend.position="top") + scale_x_discrete(labels=my_labels) + labs(y = "Fraction Missing Sites")
+garbage <- dev.off()
+
+ggplot(data=miss_all, aes(x=myFilter, y=F_MISS,col=myFilter)) +
+ geom_violin() + geom_jitter(height = 0, width = 0.1) + theme(legend.position="top") + scale_x_discrete(labels=my_labels) + labs(y = "Fraction Missing Sites")
+
+```
+
+As expected, imposing a filter of max missing data reduces the overall fraction of per-individual missingness. Removing the 6 low-coverage individuals increases the number of called sites at 75%.
+
+
+```{r Filtering exploration: SNP heterozygosity, echo=FALSE,run=FALSE,eval=FALSE}
+#Next, we'll look at **SNP heterozygosity**. This is calculated only from sites that are variable across all samples and does not include sequenced but monomorphic sites. 
+
+het_1 <- read.table("analysis/plink/bombus_franklini_combined_filtered_minDPGQ.scount",header=TRUE)
+het_2 <- read.table("analysis/plink/bombus_franklini_combined_filt_n31_maxMissing75_noSing.scount",header=TRUE)
+het_3 <- read.table("analysis/plink/bombus_franklini_combined_filt_n31_maxMissing100_noSing.scount",header=TRUE)
+het_4 <- read.table("analysis/plink/bombus_franklini_combined_filt_n25_maxMissing75_noSing.scount",header=TRUE)
+het_5 <- read.table("analysis/plink/bombus_franklini_combined_filt_n25_maxMissing100_noSing.scount",header=TRUE)
+
+het_1$myFilter <- c("F1")
+het_2$myFilter <- c("F2")
+het_3$myFilter <- c("F3")
+het_4$myFilter <- c("F4")
+het_5$myFilter <- c("F5")
+
+# calculate heterozygosity
+het_1$total <- het_1$HOM_CT + het_1$HET_CT
+het_1$het <- het_1$HET_CT/het_1$total
+
+het_2$total <- het_2$HOM_CT + het_2$HET_CT
+het_2$het <- het_2$HET_CT/het_2$total
+
+het_3$total <- het_3$HOM_CT + het_3$HET_CT
+het_3$het <- het_3$HET_CT/het_3$total
+
+het_4$total <- het_4$HOM_CT + het_4$HET_CT
+het_4$het <- het_4$HET_CT/het_4$total
+
+het_5$total <- het_5$HOM_CT + het_5$HET_CT
+het_5$het <- het_5$HET_CT/het_5$total
+
+het_all <- rbind(het_1, het_2, het_3, het_4, het_5)
+
+pdf(file="analysis/stats_plots/stats_by_filters_violin_plots_het.pdf")
+ggplot(data=het_all, aes(x=myFilter, y=het,col=myFilter)) +
+ geom_violin() + geom_jitter(height = 0, width = 0.1) + theme(legend.position="top") + labs(y = "SNP Heterozygosity")
+garbage <- dev.off()
+
+ggplot(data=het_all, aes(x=myFilter, y=het,col=myFilter)) +
+ geom_violin() + geom_jitter(height = 0, width = 0.1) + theme(legend.position="top") + labs(y = "SNP Heterozygosity")
+
+# We see that the filtering decreases the heterozygosity slightly, with the most notable difference between allowing 25% missingness in sites or no missing sites. 
+```
+
+Let's explore the **genome-wide heterozygosity**. This measure takes into account ALL sequenced sites in the genome and is generally a more accurate measure than SNP heterozygosity that is less susceptible to sample sizes and is more transferrable across studies.  https://doi.org/10.1111/2041-210X.13659
+
+```{r Filtering exploration: genome-wide heterozygosity, echo=FALSE}
+
+genomehet_1 <- read.table("analysis/plink/bombus_franklini_combined_PASS.scount",header=TRUE)
+genomehet_2 <- read.table("analysis/plink/bombus_franklini_combined_PASS_n31_maxMissing75_noSing.scount",header=TRUE)
+genomehet_3 <- read.table("analysis/plink/bombus_franklini_combined_PASS_n31_maxMissing75_minDP15_noSing_het.scount",header=TRUE)
+genomehet_4 <- read.table("analysis/plink/bombus_franklini_combined_PASS_n25_maxMissing75_minDP15_noSing_het.scount",header=TRUE)
+genomehet_5 <- read.table("analysis/plink/bombus_franklini_combined_PASS_n25_maxMissing100_minDP15_noSing_het.scount",header=TRUE)
+
+genomehet_1$myFilter <- c("F1")
+genomehet_2$myFilter <- c("F2")
+genomehet_3$myFilter <- c("F3")
+genomehet_4$myFilter <- c("F4")
+genomehet_5$myFilter <- c("F5")
+
+# calculate heterozygosity
+genomehet_1$total <- genomehet_1$HOM_CT + genomehet_1$HET_CT
+genomehet_1$het <- genomehet_1$HET_CT/genomehet_1$total
+
+genomehet_2$total <- genomehet_2$HOM_CT + genomehet_2$HET_CT
+genomehet_2$het <- genomehet_2$HET_CT/genomehet_2$total
+
+genomehet_3$total <- genomehet_3$HOM_CT + genomehet_3$HET_CT
+genomehet_3$het <- genomehet_3$HET_CT/genomehet_3$total
+
+genomehet_4$total <- genomehet_4$HOM_CT + genomehet_4$HET_CT
+genomehet_4$het <- genomehet_4$HET_CT/genomehet_4$total
+
+genomehet_5$total <- genomehet_5$HOM_CT + genomehet_5$HET_CT
+genomehet_5$het <- genomehet_5$HET_CT/genomehet_5$total
+
+genomehet_all <- rbind(genomehet_1, genomehet_2, genomehet_3, genomehet_4, genomehet_5)
+#genomehet_all <- rbind(genomehet_1, genomehet_2, genomehet_3,genomehet_4)
+
+
+pdf(file="analysis/stats_plots/stats_by_filters_violin_plots_het_genomewide.pdf")
+ggplot(data=genomehet_all, aes(x=myFilter, y=het,col=myFilter)) +
+ geom_violin() + geom_jitter(height = 0, width = 0.1) + theme(legend.position="top") + labs(y = "Genome-wide Heterozygosity")
+garbage <- dev.off()
+
+ggplot(data=genomehet_all, aes(x=myFilter, y=het,col=myFilter)) +
+ geom_violin() + geom_jitter(height = 0, width = 0.1) + theme(legend.position="top") + labs(y = "Genome-wide Heterozygosity")
+
+pdf(file="analysis/stats_plots/stats_by_filters_violin_plots_het_genomewide_F4.pdf")
+ggplot(data=genomehet_4, aes(x=myFilter, y=het)) +
+ geom_violin() + geom_jitter(height = 0, width = 0.1) + theme(legend.position="top") + labs(y = "Genome-wide Heterozygosity") 
+garbage <- dev.off()
+```
+
+Kardos & Waples 2024 suggest mean 15-20x filter to remove positive correlation between heterozygosity and DP. Let's make sure that we have removed any sort of correlation. 
+
+```{r Filtering exploration: genome-wide heterozygosity vs depth of coverage, echo=FALSE}
+# plot genome-wide het versus mean depth of coverage (see Kardos and Waples 2024)
+genomehet_2_depth <- merge(genomehet_2,depth_2,by.x="IID",by.y="INDV")
+genomehet_4_depth <- merge(genomehet_4,depth_4,by.x="IID",by.y="INDV")
+genomehet_by_depth <- rbind(genomehet_2_depth[,c("IID","het","MEAN_DEPTH","myFilter.x")],genomehet_4_depth[,c("IID","het","MEAN_DEPTH","myFilter.x")])
+
+my_colors <- c( "darkgoldenrod2","firebrick")
+
+ggplot() + 
+  geom_line(data = genomehet_by_depth, aes(x = MEAN_DEPTH, y = het, color=myFilter.x)) + 
+  scale_color_manual(name="Filters",
+                       labels=c("F2 (n=31)","F4 (n=25"),
+                       values=my_colors) + 
+  xlab('Mean Depth of Coverage') +
+  ylab('Genome-wide heterozygosity')
+ 
+```
+
+It seems as though our depth of coverage filters and removing 6 low-quality individuals has improved our overall data quality. 
+
+Next, we look at **Ts/Tv ratios**. Usually, a genome-wide rate of ~2 is expected for vertebrates, although less seems to be known about invertebrates. Lozier 2014 *Molecular Ecology* found a Ts/Tv ratio of ~3.25 in *B. impatiens* and *B. pensylvanicus*. 
+
+```{r Filtering exploration: Ts/Tv ratio, echo=FALSE}
+
+tstv_1 <- read.table("analysis/stats_vcftools/bombus_franklini_combined_PASS.TsTv.summary",header=TRUE)
+tstv_2 <- read.table("analysis/stats_vcftools/bombus_franklini_combined_PASS_n31_maxMissing75_noSing.TsTv.summary",header=TRUE)
+tstv_3 <- read.table("analysis/stats_vcftools/bombus_franklini_combined_PASS_n31_maxMissing75_minDP15_noSing.TsTv.summary",header=TRUE)
+tstv_4 <- read.table("analysis/stats_vcftools/bombus_franklini_combined_PASS_n25_maxMissing75_minDP15_noSing.TsTv.summary",header=TRUE)
+tstv_5 <- read.table("analysis/stats_vcftools/bombus_franklini_combined_PASS_n25_maxMissing100_minDP15_noSing.TsTv.summary",header=TRUE)
+
+print(paste("The Ts/Tv ratio for Filter 1 is ", round(tstv_1[7,2]/tstv_1[8,2],2), ".", sep=""))
+print(paste("The Ts/Tv ratio for Filter 2 is ", round(tstv_2[7,2]/tstv_2[8,2],2), ".", sep=""))
+print(paste("The Ts/Tv ratio for Filter 3 is ", round(tstv_3[7,2]/tstv_3[8,2],2), ".", sep=""))
+print(paste("The Ts/Tv ratio for Filter 4 is ", round(tstv_4[7,2]/tstv_4[8,2],2), ".", sep=""))
+print(paste("The Ts/Tv ratio for Filter 5 is ", round(tstv_5[7,2]/tstv_5[8,2],2), ".", sep=""))
+
+```
+
+With our more stringent filters, we observe a Ts/Tv ratio for *B. franklini* that is similar to Lozier et al. 
+
+Let's explore the relationship between genome-wide heterozygosity and collection year.
+
+```{r look at genome-wide het through time, echo=FALSE}
+# genome-wide het
+genomehet_F4_F5 <- rbind(genomehet_4, genomehet_5)
+
+genomehet_meta <- merge(genomehet_F4_F5,stats_meta,by.x="IID",by.y="SampleID")
+genomehet_meta$ShortID <- substring(genomehet_meta$IID,18)
+
+pdf(file="analysis/stats_plots/genome_het_over_time.pdf")
+ggplot(data=genomehet_meta, aes(x=CollectionYr, y=het, group=myFilter, col=myFilter)) +
+  geom_point(size=3) + theme(legend.position="top") + labs(y = "Genome-wide Heterozygosity", x = "Collection Year") + theme_bw() 
+garbage <- dev.off()
+
+ggplot(data=genomehet_meta, aes(x=CollectionYr, y=het, group=myFilter, col=myFilter)) +
+  geom_point(size=3) + theme(legend.position="top") + labs(y = "Genome-wide Heterozygosity", x = "Collection Year") + theme_bw() 
+
+# just F4 data
+
+pdf(file="analysis/stats_plots/genome_het_over_time_F4.pdf")
+
+ggplot(data=genomehet_meta[genomehet_meta$myFilter=="F4",], aes(x=CollectionYr, y=het, group=myFilter, col=myFilter)) +
+  geom_point(size=3) + theme(legend.position="top") + labs(y = "Genome-wide Heterozygosity", x = "Collection Year") + 
+    geom_point()+
+     geom_smooth(method=lm,level=0.95)+ theme_bw() 
+garbage <- dev.off()
+
+ggplot(data=genomehet_meta[genomehet_meta$myFilter=="F4",], aes(x=CollectionYr, y=het, group=myFilter, col=myFilter)) +
+  geom_point(size=3) + theme(legend.position="top") + labs(y = "Genome-wide Heterozygosity", x = "Collection Year")+ 
+    geom_point()+
+     geom_smooth(method=lm,level=0.95)+ theme_bw() 
+
+summary(lm(het ~ CollectionYr,genomehet_meta[genomehet_meta$myFilter=="F4",]))
+
+# No significant linear relationship b/t heterozygosity and sampling year. 
+
+genomehet_4_meta <- merge(genomehet_4,stats_meta,by.x="IID",by.y="SampleID")
+
+summary(lm(het ~ CollectionYr,genomehet_4_meta))
+
+genomehet_5_meta <- merge(genomehet_5,stats_meta,by.x="IID",by.y="SampleID")
+summary(lm(het ~ CollectionYr,genomehet_5_meta))
+
+```
+```{r Compare pre-1995 with mid-decline 1995, echo=FALSE}
+
+pre <- genomehet_4_meta[genomehet_4_meta$CollectionYr<1995,]
+mid <- genomehet_4_meta[genomehet_4_meta$CollectionYr>=1995,]
+
+pre$decline <- "pre"
+mid$decline <- "mid"
+
+genomehet_4_meta <- rbind(pre,mid)
+
+ggplot(data=genomehet_4_meta, aes(x=decline, y=het)) +
+ geom_violin() + geom_jitter(height = 0, width = 0.1) + theme(legend.position="top") + labs(y = "Genome-wide Heterozygosity")
+
+wilcox.test(het ~ decline, data = genomehet_4_meta)
+
+
+```
+
+We do not observe a difference in genome-wide heterozygosity between pre-1995 and 1995 samples. 
+
+Now we can compare the genome-wide heterozygosity to a set of values published in Robinson et al. 2016. 
+
+```{r Compare genome-wide het to values from Robinson et al. 2016, echo=FALSE}
+# use data from F4 genome-wide het
+
+johnson_data <- read.table("analysis/Robinson_2016_genomeHet.txt",header=TRUE,sep="\t") 
+johnson_het <- johnson_data[johnson_data$Seq_Type == "genome-wide",]
+
+tmp <- as.data.frame(genomehet_4[,c("het")])
+tmp$Species <- "Bombus_franklini"
+tmp$Common_Name <- "Franklins_bumble_bee"
+tmp$Kingdom <- "animal"
+tmp$Seq_Type <- "genome-wide"
+tmp$Source <- "current"
+colnames(tmp)[1] <- "Observed_π"
+tmp$Insect <- "yes"
+
+johnson_het_add <- rbind(tmp, johnson_het)
+
+# calculate mean by species
+
+johnson_het_add_means <- johnson_het_add %>%
+  group_by(Species) %>%
+  summarise(Observed_π_species = mean(Observed_π),Common_Name=max(Common_Name),Kingdom=max(Kingdom),Seq_Type=max(Seq_Type),Source=max(Source),Insect=max(Insect))
+
+# plot and group by kingdom
+ggplot(johnson_het_add_means, aes(x=Observed_π_species,color=Insect,fill=Insect)) +
+  geom_histogram(position="identity", alpha=0.50,bins=50) + geom_vline(xintercept=mean(genomehet_4$het),linetype="dashed", color = "black") + scale_x_continuous(trans = "log10",labels = function(x) format(x, scientific = FALSE)) + labs(x = "Genome-wide Heterozygosity",y="Frequency")+ geom_text(aes(x=mean(genomehet_4$het), label="B. franklini", y=5.3), colour="black", vjust = 1.2) + theme_bw() 
+
+pdf(file="analysis/stats_plots/genome_het_compared_to_Johnson_data.pdf")
+ggplot(johnson_het_add_means, aes(x=Observed_π_species,color=Insect,fill=Insect)) +
+  geom_histogram(position="identity", alpha=0.50,bins=50) + geom_vline(xintercept=mean(genomehet_4$het),linetype="dashed", color = "black") + scale_x_continuous(trans = "log10",labels = function(x) format(x, scientific = FALSE)) + labs(x = "Genome-wide Heterozygosity",y="Frequency") + geom_text(aes(x=mean(genomehet_4$het), label="B. franklini", y=5.3), colour="black", vjust = 1.2) + theme_bw() 
+garbage <- dev.off()
+
+pdf(file="analysis/stats_plots/genome_het_compared_to_Johnson_data_uncolored.pdf")
+ggplot(johnson_het_add_means, aes(x=Observed_π_species)) +
+  geom_histogram(position="identity", alpha=0.50,bins=50,color="darkblue", fill="lightblue") + geom_vline(xintercept=mean(genomehet_4$het),linetype="dashed", color = "black") + scale_x_continuous(trans = "log10",labels = function(x) format(x, scientific = FALSE)) + labs(x = "Genome-wide Heterozygosity", y= "Frequency") + geom_text(aes(x=mean(genomehet_4$het), label="B. franklini", y=5.3), colour="black", vjust = 1.2) + theme_minimal()
+garbage <- dev.off()
+
+```
+
+We see that Bombus franklini has genome-wide heterozygosity on the low end of published values. 
+
+Let's look at PCA plots of the data. Here, we will use only F5, allowing for no missing data. 
+
+```{r plot pca, echo=FALSE}
+
+# with F5
+
+pca_F5 <-  read.table("analysis/plink/bombus_franklini_combined_PASS_n25_maxMissing100_minDP15_noSing_0.3.eigenvec",head=TRUE)
+
+colnames(pca_F5) <- c("sample","extra","PC1","PC2","PC3","PC4","PC5","PC6","PC7","PC8","PC9","PC10")
+
+pca_F5_meta <- merge(stats_meta,pca_F5,by.x="SampleID",by.y="sample")
+
+pca_F5_meta$ShortID <- substring(pca_F5_meta$SampleID,18)
+
+# percent of total variation 
+pca_F5_meta_eigenval <- read.table("analysis/plink/bombus_franklini_combined_PASS_n25_maxMissing100_minDP15_noSing_0.3.eigenval",head=FALSE)
+colnames(pca_F5_meta_eigenval) <- "eigenval"
+pca_F5_meta_eigenval$prop <- pca_F5_meta_eigenval$eigenval/sum(pca_F5_meta_eigenval$eigenval)
+
+
+# plot 
+
+pdf(file="analysis/stats_plots/bombus_franklini_pca_F5_0.3.pdf")
+p <- ggplot(pca_F5_meta, aes(x=PC1, y=PC2, color=as.character(CollectionYr), label=ShortID,shape=LocalityShort)) +
+  geom_point(size=3) + scale_color_manual(values=c("cornsilk4","darkorange1","red","green2","mediumaquamarine","gold","cadetblue1")) + theme(legend.position="top") + ggtitle("PCA of F5 SNPs (n=25, no missing data, 19,260 LD-pruned SNPs)")
+p
+garbage <- dev.off()
+
+p
+
+# with text labels
+
+pdf(file="analysis/stats_plots/bombus_franklini_pca_F5_0.3_labels.pdf")
+p +  geom_text(col="black",size=2,angle=45,nudge_y=0.05,nudge_x=0.07) 
+garbage <- dev.off()
+
+
+# with BLX 3233 removed
+
+pca_F5_mod <-  read.table("analysis/plink/bombus_franklini_combined_PASS_n24_maxMissing100_minDP15_noSing_0.3.eigenvec",head=TRUE)
+
+colnames(pca_F5_mod) <- c("sample","extra","PC1","PC2","PC3","PC4","PC5","PC6","PC7","PC8","PC9","PC10")
+
+pca_F5_mod_meta <- merge(stats_meta,pca_F5_mod,by.x="SampleID",by.y="sample")
+
+pca_F5_mod_meta$ShortID <- substring(pca_F5_mod_meta$SampleID,18)
+
+# percent of total variation 
+pca_F5_mod_eigenval <- read.table("analysis/plink/bombus_franklini_combined_PASS_n24_maxMissing100_minDP15_noSing_0.3.eigenval",head=FALSE)
+colnames(pca_F5_mod_eigenval) <- "eigenval"
+pca_F5_mod_eigenval$prop <- pca_F5_mod_eigenval$eigenval/sum(pca_F5_mod_eigenval$eigenval)
+
+# split into groups that have 3 individuals or more
+
+#ellipse_data <- pca_F5_mod_meta %>%
+#  group_by(as.character(CollectionYr)) %>%
+#  filter(n() > 3) %>%
+#  ungroup()
+
+# plot 
+
+pdf(file="analysis/stats_plots/bombus_franklini_pca_F5_n24_0.3.pdf")
+q<- ggplot(pca_F5_mod_meta, aes(x=PC1, y=PC2, color=as.character(CollectionYr), label=ShortID,shape=LocalityShort)) +
+  geom_point(size=3) +
+  #stat_ellipse(data=ellipse_data, aes(x=PC1, y=PC2, color=as.character(CollectionYr)), level=0.95,type="norm") +             
+  scale_color_manual(values=c("cornsilk4","darkorange1","red","green2","mediumaquamarine","gold","cadetblue1")) + 
+  theme(legend.position="top") + ggtitle("PCA of F5 SNPs (n=24, no missing data, 19,403 LD-pruned SNPs)") 
+q
+garbage <- dev.off()
+
+q
+
+# with text labels
+
+pdf(file="analysis/stats_plots/bombus_franklini_pca_F5__n24_0.3_labels.pdf")
+q + geom_text(col="black",size=2,angle=45,nudge_y=0.05,nudge_x=0.07)
+garbage <- dev.off()
+
+
+```
+
+Next, we will confirm/check that our PCA does not qualitatively seem to be driven by depth of coverage, but rather by some biological signal (maybe lat/long?). 
+
+```{r plot pca with other variables, echo=FALSE}
+
+# confirm that pca patterns are not driven by data quality artifacts
+
+#  pca data for F5
+
+pca_F5_meta$ShortID <- substring(pca_F5_meta$SampleID,18)
+pca_F5_meta$LatDD <- as.numeric(pca_F5_meta$LatDD)
+pca_F5_meta$LonDD <- as.numeric(pca_F5_meta$LonDD)
+
+# plot PCA values by depth
+
+pca_F5_meta_depth <- merge(pca_F5_meta,depth_3, by.x="SampleID",by.y="INDV")
+
+pdf(file="analysis/stats_plots/bombus_franklini_pca_F5_0.3_by_depth.pdf")
+g <- ggplot(pca_F5_meta_depth, aes(x=PC1, y=PC2, color=MEAN_DEPTH, label=ShortID)) +
+  geom_point(size=3) + scale_color_gradient(low = "yellow", high = "darkblue",na.value = "grey50") + theme(legend.position="top") + ggtitle("PCA F5 by depth")
+g
+garbage <- dev.off()
+
+g
+
+# plot PCA F5 values by longitude
+
+pdf(file="analysis/stats_plots/bombus_franklini_pca_F5_0.3_by_longitude.pdf")
+p <- ggplot(pca_F5_meta, aes(x=PC1, y=PC2, color=LonDD, label=ShortID)) +
+  geom_point(size=3) + scale_color_gradient(low = "yellow", high = "darkblue",na.value = "grey50") + theme(legend.position="top") + ggtitle("PCA F5 by longitude")
+p
+garbage <- dev.off()
+
+p
+
+# plot PCA values by latitude
+
+pdf(file="analysis/stats_plots/bombus_franklini_pca_F5_0.3_by_latitude.pdf")
+q <- ggplot(pca_F5_meta, aes(x=PC1, y=PC2, color=LatDD, label=ShortID)) +
+  geom_point(size=3) + scale_color_gradient(low = "yellow", high = "darkblue",na.value = "grey50") + theme(legend.position="top") + ggtitle("PCA F5 by latitude")
+q
+garbage <- dev.off()
+
+q
+
+```
+
+Next, we'll look at the admixture results. The most likely K was 1, but we will plot a few K values. 
+
+```{r plot admixture results, echo=FALSE}
+# https://owensgl.github.io/biol525D/Topic_8-9/plotting_structure.html
+# n=25
+
+fam_file <- read.table("analysis/admixture/bombus_franklini_combined_PASS_n25_maxMissing75_minDP15_noSing_0.3_fixChr.fam",header=FALSE)
+fam_file_meta <- merge(fam_file,sample_meta,by.x="V1",by.y="SampleID")
+fam_file_meta$code <- paste(substring(fam_file_meta$LocalityShort,5), fam_file_meta$CollectionYr, substring(fam_file$V1,18),sep=".")
+#samples <- fam_file$V1
+
+all_data <- tibble(sample=character(),
+                   k=numeric(),
+                   Q=character(),
+                   value=numeric())
+
+# combine across different k values
+for (k in 1:3){
+  data <- read.table(paste("analysis/admixture/bombus_franklini_combined_PASS_n25_maxMissing75_minDP15_noSing_0.3_fixChr.",k,".Q",sep=""))
+  colnames(data) <- paste("Q",seq(1:k))
+  data$sample <- fam_file_meta$code
+  data$k <- k
+  
+  #This step converts from wide to long.
+  data %>% gather(Q, value, -sample,-k) -> data
+  all_data <- rbind(all_data,data)
+}
+
+# order by K=2 values
+
+#new_data <- all_data[order(all_data$k, -all_data$value),]
+
+#plot one k value, here k=3
+#all_data %>%
+ # filter(k == 3) %>%
+# ggplot(.,aes(x=sample,y=value,fill=factor(Q))) + 
+#  geom_bar(stat="identity",position="stack") +
+#  xlab("Sample") + ylab("Ancestry") +
+#  theme_bw() +
+#  theme(axis.text.x = element_text(angle = 60, hjust = 1)) +
+#  scale_fill_brewer(palette="Set1",name="K",
+#                    labels=c("1","2","3"))
+
+pdf(file="analysis/stats_plots/bombus_franklini_admixture_F5.pdf",width=6,height=6)
+all_data %>%
+  ggplot(.,aes(x=sample,y=value,fill=factor(Q))) + 
+  geom_bar(stat="identity",position="stack") +
+  xlab("Sample") + ylab("Ancestry") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1)) +
+  scale_fill_brewer(palette="Paired",name="K",
+                    labels=seq(1:3)) +
+  facet_wrap(~k,ncol=1)
+garbage <- dev.off()
+
+all_data %>%
+  ggplot(.,aes(x=sample,y=value,fill=factor(Q))) + 
+  geom_bar(stat="identity",position="stack") +
+  xlab("Sample") + ylab("Ancestry") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1)) +
+  scale_fill_brewer(palette="Paired",name="K",
+                    labels=seq(1:3)) +
+  facet_wrap(~k,ncol=1)
+
+cv <- read.table("analysis/admixture/crossValidation_bombus_franklini_combined_PASS_n25_maxMissing75_minDP15_noSing_0.3_fixChr.txt",header=FALSE,sep=" ")
+cv$K <- c(10,1,2,3,4,5,6,7,8,9)
+
+# plot the CV error
+pdf(file="analysis/stats_plots/bombus_franklini_admixture_F5_cv_error.pdf",width=6,height=3)
+ggplot(cv, aes(x=K, y=V4)) +
+  geom_line() +
+  geom_point() + 
+  scale_x_continuous(breaks=c(1:10)) + 
+  ylab("CV Error") + 
+  ggtitle("CV Error for admixture results for B. franklini n=25 ") +
+  theme_bw()
+garbage <- dev.off()
+
+ggplot(cv, aes(x=K, y=V4)) +
+  geom_line() +
+  geom_point() + 
+  scale_x_continuous(breaks=c(1:10)) + 
+  ylab("CV Error") + 
+  ggtitle("CV Error for admixture results for B. franklini n=25 ") +
+  theme_bw()
+
+```
+
+Again, no discernible structuring? Let's take a look at relatedness among individuals. 
+
+We calculated pairwise relatedness using KING in plink. Note that KING kinship coefficients are scaled such that duplicate samples have kinship 0.5, not 1. First-degree relations (parent-child, full siblings) correspond to ~0.25, second-degree relations correspond to ~0.125, etc.
+
+
+```{r Relatedness with KING, echo=FALSE}
+# http://www.sthda.com/english/wiki/ggplot2-quick-correlation-matrix-heatmap-r-software-and-data-visualization
+
+related_n25 <- read.table("analysis/relatedness/bombus_franklini_combined_PASS_n25_maxMissing75_minDP15_noSing_var_0.3.kin0",header=TRUE)
+
+related_n25$shortID1 <- substring(related_n25$FID1,18)
+related_n25$shortID2 <- substring(related_n25$FID2, 18)
+
+## show distribution of relatedness values
+
+hist(related_n25$KINSHIP,breaks=100,main="Histogram of pairwise kinship",xlab="kinship")
+text(x=-0.3,y=30,labels=paste("min: ",min(related_n25$KINSHIP),"\nmax: ",max(related_n25$KINSHIP),"\nmean: ",mean(related_n25$KINSHIP)))
+
+pdf(file="analysis/stats_plots/bombus_franklini_KING_relatedness_histogram_n25.pdf")
+hist(related_n25$KINSHIP,breaks=100,main="Histogram of pairwise kinship",xlab="kinship")
+text(x=-0.3,y=30,labels=paste("min: ",min(related_n25$KINSHIP),"\nmax: ",max(related_n25$KINSHIP),"\nmean: ",mean(related_n25$KINSHIP)))
+garbage <- dev.off()
+
+
+# melt the correlation matrix for plotting
+#melted_related <- melt(related_final)
+#head(melted_related)
+p <- ggplot(data = related_n25, aes(x=shortID1, y=shortID2, fill=as.numeric(KINSHIP))) + 
+ geom_tile(color = "white") +
+ scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+   midpoint = 0.25, limit = c(-0.5,0.25), space = "Lab", 
+   name="Kinship") +
+  theme_minimal()+ 
+ theme(axis.text.x = element_text(angle = 60, vjust = 1, 
+    size = 10, hjust = 1)) + labs(x = "Individual 1",y="Individual 2")
+p
+
+pdf(file="analysis/stats_plots/bombus_franklini_KING_relatedness_heat_n25.pdf")
+p
+garbage <- dev.off()
+
+## Same thing but removing BLX3233
+
+related_n24 <- read.table("analysis/relatedness/bombus_franklini_combined_PASS_n24_maxMissing75_minDP15_noSing_var_0.3.kin0",header=TRUE)
+
+related_n24$shortID1 <- substring(related_n24$FID1,18)
+related_n24$shortID2 <- substring(related_n24$FID2, 18)
+
+## show distribution of relatedness values
+
+hist(related_n24$KINSHIP,breaks=100,main="Histogram of pairwise kinship",xlab="kinship")
+text(x=-0.06,y=10,labels=paste("min: ",min(related_n24$KINSHIP),"\nmax: ",max(related_n24$KINSHIP),"\nmean: ",mean(related_n24$KINSHIP)))
+
+pdf(file="analysis/stats_plots/bombus_franklini_KING_relatedness_histogram_n24.pdf")
+hist(related_n24$KINSHIP,breaks=100,main="Histogram of pairwise kinship",xlab="kinship")
+text(x=-0.06,y=10,labels=paste("min: ",min(related_n24$KINSHIP),"\nmax: ",max(related_n24$KINSHIP),"\nmean: ",mean(related_n24$KINSHIP)))
+garbage <- dev.off()
+
+
+# melt the correlation matrix for plotting
+#melted_related <- melt(related_final)
+#head(melted_related)
+q <- ggplot(data = related_n24, aes(x=shortID1, y=shortID2, fill=as.numeric(KINSHIP))) + 
+ geom_tile(color = "white") +
+ scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+   midpoint = 0.25, limit = c(-0.5,0.25), space = "Lab", 
+   name="Kinship") +
+  theme_minimal()+ 
+ theme(axis.text.x = element_text(angle = 60, vjust = 1, 
+    size = 10, hjust = 1)) + labs(x = "Individual 1",y="Individual 2")
+q
+
+pdf(file="analysis/stats_plots/bombus_franklini_KING_relatedness_heat_n24.pdf")
+q
+garbage <- dev.off()
+
+```
+
+It seems as though there is not much relatedness amongst individuals. This makes sense given that they are from different sampling years and geographic locations. However, BLX3233, which has fairly low heterozygosity does not seem to have almost no kinship with the other samples. Is it worth removing? Seems odd. 
+
+Next, we will **calculate and visualize runs of homozygosity (ROH)**. ROH represent a measure of shared ancestry in the population. Long ROHs represent recent inbreeding in populations, while shorter ROH indicate historical founder or bottleneck events. ROH can also demonstrate non-random mating and/or strong selection for a specific genomic region, although the latter should be present in only a fraction of the genome.
+
+We use the software bcftools to calculate ROH using the 75% max-missing data set, with no singletons, for the 18 autosomes of the B. affinis genome. 
+
+```{r runs of homozygosity, echo=FALSE}
+
+bcftools_runs <- readExternalRuns(inputFile = "analysis/runs_of_homozygosity/bombus_franklini_combined_PASS_n25_maxMissing75_minDP15_noSing.recode.vcf_bcftoolsROH_chr.txt.gz", program = "BCFtools") # only looks at chromosomes
+
+# read in chr codes from NCBI
+chr_codes <- read.table("analysis/runs_of_homozygosity/baffinis_ncbi_chr_codes.txt", header=TRUE)
+
+tmp_roh <- merge(bcftools_runs,chr_codes,by.x="chrom",by.y="ncbi_refseq_id")
+tmp_roh2 <- merge(tmp_roh,sample_meta,by.x="id",by.y="SampleID")
+roh_fix <- tmp_roh2[,c(10,1,8,4,5,6,7,3)]
+colnames(roh_fix) <- c("group","id","chrom","nSNP","from","to","lengthBps","g") # use collection year as group
+
+# histogram of all ROH length
+
+hist(roh_fix$lengthBps,breaks=100,main="Histogram of ROH",xlab="length (bp)")
+
+print(paste("Amongst all individuals, the number of ROH > 1 Mb is ",dim(subset(roh_fix,roh_fix$lengthBps>1000000))[1],".",sep="")) 
+
+print(paste("Amongst all individuals, the number of ROH between 250 Kb and 1 Mb is ",dim(subset(roh_fix,(roh_fix$lengthBps<1000000 & roh_fix$lengthBps>250000)))[1],".",sep="")) 
+
+print(paste("Amongst all individuals, the number of ROH > 250 Kb is ",dim(subset(roh_fix,roh_fix$lengthBps>250000))[1],".",sep="")) 
+
+# violin plots by year and per individual
+
+roh_fix$group<- factor(roh_fix$group, levels = c("1950","1967", "1968", "1980", "1990", "1995", "1998"))
+
+pdf(file="analysis/runs_of_homozygosity/bombus_franklini_ROH_violin_plots_by_year.pdf")
+k <- ggplot(roh_fix, aes(lengthBps, factor(group))) +
+  geom_violin(aes(fill = factor(group))) + 
+  geom_vline(xintercept = 1000000,linetype="dashed", color = "blue") + 
+  labs(title= "Runs of Homozygosity Split by Year", x="Length of ROH (bp)",y="Collection Year")
+k
+garbage <- dev.off()
+
+k
+
+roh_fix <- roh_fix %>%
+   mutate(id_short=gsub("Bombus_franklini_","",id)) %>%
+   arrange(group,id_short) %>%
+  mutate(id_short=factor(id_short,levels=unique(id_short))) 
+
+
+pdf(file="analysis/runs_of_homozygosity/bombus_franklini_ROH_violin_plots_per_indiv_vertical.pdf")
+l <- ggplot(roh_fix, aes(lengthBps, factor(id))) +
+  geom_violin(aes(fill = factor(group))) + 
+  geom_vline(xintercept = 1000000,linetype="dashed", color = "blue") + 
+  labs(title= "Runs of Homozygosity by Indiv", x="Length of ROH (bp)",y="Individual")
+l
+garbage <- dev.off()
+
+pdf(file="analysis/runs_of_homozygosity/bombus_franklini_ROH_violin_plots_per_indiv_horizontal_log10.pdf")
+m <- ggplot(roh_fix, aes(x=id_short, y=log10(lengthBps))) +
+  geom_violin(aes(fill = factor(group)),trim=FALSE) + 
+  geom_jitter(aes(fill=factor(group)),width=0.01,alpha=0.5,size=0.5) + 
+  geom_hline(aes(yintercept = log10(500000),linetype="dashed"), color = "blue") + 
+  geom_hline(aes(yintercept = log10(1000000),linetype="dotted"), color = "red") + 
+  geom_hline(aes(yintercept = log10(5750000),linetype="solid"), color = "green4") + 
+  labs(title= "Runs of Homozygosity by Indiv", x="Individual",y="Log10 Length of ROH (bp)") + 
+   theme_bw() + 
+   theme(axis.text.x= element_text(angle=45,hjust=1)) + 
+   scale_color_brewer(palette="RdYlBu") + 
+  scale_fill_brewer(palette="RdYlBu")
+m
+garbage <- dev.off()
+
+#ggplot(roh_fix, aes(x=group, y=lengthBps)) +
+#  geom_violin(aes(fill = factor(group)),trim=FALSE) + 
+#  geom_jitter(width=0.01,alpha=0.5) + 
+#  geom_hline(yintercept = 1000000,linetype="dashed", color = "blue") + 
+#  labs(title= "Runs of Homozygosity by Indiv", x="Collection Year",y="Length of ROH (bp)")
+
+
+## detectRUNs output
+
+pdf(file="analysis/runs_of_homozygosity/bombus_franklini_ROH_detectRUNs_by_chr.pdf")
+garbage <- plot_Runs(runs = roh_fix)
+garbage <- dev.off()
+
+
+pdf(file="analysis/runs_of_homozygosity/bombus_franklini_ROH_detectRUNs_stacked.pdf")
+garbage <- plot_StackedRuns(runs = roh_fix)
+garbage <- dev.off()
+
+roh_fix_1Mb <- subset(roh_fix,roh_fix$lengthBps >= 1000000)
+pdf(file="analysis/runs_of_homozygosity/bombus_franklini_ROH_detectRUNs_stacked_1Mb.pdf")
+garbage <- plot_StackedRuns(runs = roh_fix_1Mb)
+garbage <- dev.off()
+
+pdf(file="analysis/runs_of_homozygosity/bombus_franklini_ROH_detectRUNs_by_chr_1Mb.pdf")
+garbage <- plot_Runs(runs = roh_fix_1Mb)
+garbage <- dev.off()
+
+# Calculate Froh in different categories.
+
+#roh_fix$bins <- cut(roh_fix$lengthBps, breaks=c(0,250000,500000,1000000,2000000,5000000,16000000), labels=c("1bp-250kb","250kb-500kb","500kb-1Mb","1Mb-2Mb","2Mb-4Mb","5Mb-16Mb"))
+roh_fix$bins <- cut(roh_fix$lengthBps, breaks=c(0,1000000,16000000), labels=c("1bp-1Mb","1Mb-16Mb"))
+
+roh_fix_cats <-  roh_fix%>%
+  group_by(id,bins) %>% 
+  summarise(Total_length = sum(lengthBps))
+
+roh_fix_cats$Froh <- roh_fix_cats$Total_length/279879617 # the total sum of genome included in ROH analysis
+
+pdf(file="analysis/runs_of_homozygosity/bombus_franklini_ROH_by_size.pdf")
+o <- ggplot(roh_fix_cats, aes(x=bins, y=Froh)) +
+  geom_violin(trim=FALSE) + 
+  geom_jitter(width=0.01,size=0.5) + 
+  labs(title= "Inbreeding coefficient by ROH", x="ROH Length Category",y="FROH") + 
+   theme_bw()
+o
+garbage <- dev.off()
+
+
+
+pdf(file="analysis/runs_of_homozygosity/bombus_franklini_FROH_1Mb_plot.pdf")
+n <- ggplot(roh_fix, aes(x=id_short, y=log10(lengthBps))) +
+
+    labs(title= "Runs of Homozygosity by Indiv", x="Individual",y="Log10 Length of ROH (bp)") + 
+   theme_bw() + 
+   theme(axis.text.x= element_text(angle=45,hjust=1)) + 
+   scale_color_brewer(palette="RdYlBu") + 
+  scale_fill_brewer(palette="RdYlBu")
+n
+garbage <- dev.off()
+
+
+# froh greater than 1 Mb for all 25 individuals
+
+froh_1Mb <- read.table("analysis/runs_of_homozygosity/roh_greater1Mb_chrOnly.txt",header=TRUE)
+
+froh_1Mb_meta <- merge(froh_1Mb,sample_meta,by.x="Individual",by.y="SampleID",all.x=TRUE)
+
+pdf(file="analysis/runs_of_homozygosity/bombus_franklini_FROH_1Mb_hist.pdf")
+hist(froh_1Mb_meta$FROH,breaks=50,xlab="FROH > 1 Mb", main="Proportion of Sequenced Genome in ROH (FROH) > 1 Mb")
+garbage <- dev.off()
+
+# make the plot to match the violin plot
+
+froh_1Mb_meta <- froh_1Mb_meta %>%
+   mutate(id_short=gsub("Bombus_franklini_","",Individual)) %>%
+   arrange(CollectionYr,id_short) %>%
+  mutate(id_short=factor(id_short,levels=unique(id_short))) 
+
+
+pdf(file="analysis/runs_of_homozygosity/bombus_franklini_FROH_1Mb_plot.pdf",width=6,height=2)
+p <- ggplot(froh_1Mb_meta, aes(x=id_short, y=FROH)) +
+  geom_point(size=2,aes(color = factor(CollectionYr))) + 
+    theme_bw() + 
+   theme(axis.text.x= element_text(angle=45,hjust=1)) + 
+   scale_color_brewer(palette="RdYlBu") + 
+    scale_fill_brewer(palette="RdYlBu") + 
+  theme(legend.position="none")
+p
+garbage <- dev.off()
+
+# mean and sd
+
+mean(froh_1Mb_meta$FROH)
+sd(froh_1Mb_meta$FROH)
+
+```
+
+From our ROH analysis, it seems as though we have some individuals who have large proportions of their genomes that are >1 Mb and homozygous. There does not seem to be an increase in length of ROH associated with year because we have individuals from 1967 and 1998 that have long ROHs. It does appear as if a couple of individuals have extremely long ROH, while many individuals have shorter ROH. We may want to adjust the sizes of ROH that we look for, but 1 Mb is generally considered recent and 250 Kb reflects more ancient shared ancestry. We can also estimate the TMRCA of different size segments if we assume a recombination rate and generation time in bumble bees. In this case, a 1 Mb length indicates shared ancestry ~5.74 years ago an 250 Kb indicates shared ancestry ~23 years ago. 
+
+We calculate **genome-wide heterozygosity in 100 kb windows**, with heterozygosity as defined in Robinson et al. 2022: "We define heterozygosity as the proportion of all called genotypes within a single individual that are heterozygous. This value represents the average number of pairwise differences per site between homologous chromosomes within a single individual. As we generated VCF files that included invariant positions, the denominator includes all sites with called genotypes, including those that are invariant and match the reference."
+
+```{r windows of heterozygosity, echo=FALSE}
+
+# 1 Mb windows
+# win_het_1Mb <- read.table("analysis/het_windows/bombus_franklini_combined_PASS_n25_maxMissing75_minDP15_noSing.recode.vcf.gz_het_combined_1000000win_1000000step.txt",header=TRUE)
+
+# 100 Kb windows by individual
+
+win_het_100Kb <- read.table("analysis/het_windows/bombus_franklini_combined_PASS_n25_maxMissing75_minDP15_noSing.recode.vcf.gz_het_combined_100000win_100000step.txt",header=TRUE)
+
+id_list <- c("Bombus_franklini_BLX2735","Bombus_franklini_BLX2736","Bombus_franklini_BLX3213","Bombus_franklini_BLX3215","Bombus_franklini_BLX3216","Bombus_franklini_BLX3217","Bombus_franklini_BLX3218","Bombus_franklini_BLX3220","Bombus_franklini_BLX3221","Bombus_franklini_BLX3222","Bombus_franklini_BLX3223","Bombus_franklini_BLX3224","Bombus_franklini_BLX3225","Bombus_franklini_BLX3227","Bombus_franklini_BLX3229","Bombus_franklini_BLX3230","Bombus_franklini_BLX3231","Bombus_franklini_BLX3232","Bombus_franklini_BLX3233","Bombus_franklini_BLX3234","Bombus_franklini_BLX3235","Bombus_franklini_BLX3236","Bombus_franklini_BLX3237","Bombus_franklini_BLX3238","Bombus_franklini_GNS104")
+
+# update ids to chromosome
+chrom_codes <- read.table("ref_genome_bombus_affinis/baffinis_chromosome_codes.txt",header=TRUE)
+win_het_100Kb_chr <- merge(win_het_100Kb,chrom_codes,by="contig")
+
+for (i in id_list){
+  win_het_100Kb_chr[[(paste0("heterozygosity_",i))]]<- win_het_100Kb_chr[[paste0("hets_",i)]]/win_het_100Kb_chr[[paste0("calls_",i)]]
+}
+
+# filter out windows that have fewer than 50% calls
+
+for (i in id_list){
+  win_het_100Kb_chr[[(paste0("heterozygosity_",i))]]<- ifelse(win_het_100Kb_chr[[paste0("calls_",i)]] < 50000,
+                                                              NA,
+                                                              win_het_100Kb_chr[[(paste0("heterozygosity_",i))]])
+}
+
+
+# calculate heterozygosity for each individual
+mean_het <- data.frame(
+  individual = id_list,
+  mean_heterozygosity = sapply(1:25,function(i) mean(win_het_100Kb_chr[[paste("heterozygosity_",id_list[i],sep="")]],na.rm=TRUE))
+)
+
+
+# reformat data into long format
+
+long_data <- win_het_100Kb_chr %>%
+  dplyr::select(chrom,window_start, starts_with("heterozygosity_")) %>%
+  gather(key="individual",value="heterozygosity",-chrom,-window_start)
+
+# extract individual IDs
+
+#long_data$ID <- gsub("heterozygosity_Bombus_franklini_","",long_data$individual)
+
+#long_data$plotname=paste(gsub("Bombus_franklini_","",mean_het$individual), "\nmean het. = ", sprintf("%.3f", 100*mean_het$mean_heterozygosity), " per kb", sep="")
+
+# remove NaN values
+
+long_data <- long_data %>%
+  filter(!is.nan(heterozygosity))
+
+# convert chrom and id columns to factors
+
+long_data <- long_data %>%
+  mutate(chrom=as.factor(chrom),individual=as.factor(gsub("heterozygosity_","",individual))) # remove heterozygosity prefix to align with ROH
+
+# create cumulative positions of chromosome and window for plotting properly (from https://ggplot2.tidyverse.org/reference/lims.html)
+
+window_size=100000
+
+long_data <- long_data %>% 
+  
+  # Compute chromosome size
+  group_by(chrom) %>% 
+  summarise(chr_len=max(window_start) + window_size) %>% 
+
+  # Calculate cumulative position of each chromosome
+  mutate(tot=cumsum(chr_len)-chr_len) %>%
+  dplyr::select(-chr_len) %>%
+  
+  # Add this info to the initial dataset
+  left_join(long_data, ., by=c("chrom"="chrom")) %>%
+  
+  # Add a cumulative position of each window
+  arrange(chrom, window_start) %>%
+  mutate(windowcum=window_start+tot)
+
+axisdf = long_data %>%
+  group_by(chrom) %>%
+  summarize(min= min(windowcum), max= max(windowcum),center=( max(windowcum) + min(windowcum) ) / 2 )
+
+# add back in mean het
+long_data <- long_data %>%
+  left_join(mean_het, by="individual")
+
+long_data$id_short <- gsub("Bombus_franklini_","",long_data$individual)
+mean_het$id_short <-gsub("Bombus_franklini_","",mean_het$individual)
+
+# plot
+
+p <- ggplot(long_data,aes(x=windowcum,y=heterozygosity)) + 
+  geom_bar(stat = "identity",aes(color=as.factor(chrom))) + 
+  # geom_point(aes(color=as.factor(chrom)),size=0.05, alpha=0.7) + 
+    scale_color_manual(values = rep(c("grey", "skyblue"), 18 )) +
+  geom_hline(aes(yintercept = mean_heterozygosity), data=mean_het,linetype="3313", color = "black") +
+
+  facet_wrap (~ id_short, scales="free_x") + 
+  
+  # custom X axis:
+  scale_x_continuous( label = axisdf$chrom, breaks= axisdf$center ) +
+  scale_y_continuous(expand = c(0, 0) ) +     # remove space between plot area and x axis
+  labs(title= "Heterozygosity across the genome (100 kb non-overlapping windows)", x="genomic position",y="heterozygosity") + 
+  
+  # Customize the theme:
+
+  theme_minimal() +
+  theme(legend.position="none", axis.text.x=element_blank(),panel.grid.major.x = element_blank(),  panel.grid.minor.x = element_blank()) 
+
+ p
+
+pdf(file="analysis/het_windows/het_windows_100kb_allindiv.pdf",width=14,height=14)
+p
+garbage <- dev.off()
+
+#pdf(file="analysis/het_windows/het_windows_100kb_allindiv_max008.pdf",width=14,height=14)
+#p + ylim(0,0.008)
+#garbage <- dev.off()
+
+
+# try with ROH at cumulative positions
+
+colnames(roh_fix)[2]="individual"
+
+roh_data_1mb <- subset(roh_fix,lengthBps>=1000000)
+roh_data_1mb <- roh_data_1mb %>%
+  mutate(chrom=as.factor(chrom),individual=as.factor(individual))
+
+roh_data_1mb <- merge(roh_data_1mb,axisdf,by="chrom",all.x=TRUE)
+
+roh_data_1mb$windowcum <- roh_data_1mb$from + roh_data_1mb$min
+roh_data_1mb$cumto <- roh_data_1mb$to + roh_data_1mb$min
+
+# what if we don't filter
+roh_data_all <- roh_fix %>%
+  mutate(chrom=as.factor(chrom),individual=as.factor(individual))
+
+roh_data_all <- merge(roh_data_all,axisdf,by="chrom",all.x=TRUE)
+
+roh_data_all$windowcum <- roh_data_all$from + roh_data_all$min
+roh_data_all$cumto <- roh_data_all$to + roh_data_all$min
+
+# roh filters, g for generations
+roh_data_5g <- subset(roh_data_all,lengthBps>=1000000)
+roh_data_10g <- subset(roh_data_all,lengthBps>=500000 & lengthBps<1000000)
+
+# plot, add to 'p' with horizontal bars
+
+pdf(file="analysis/het_windows/het_windows_100kb_allindiv_wROH.pdf",width=14,height=14)
+p + geom_segment(data=roh_data_5g,aes(x=windowcum,xend=cumto,y=-0.0002,yend=-0.0002,group=chrom),color='red',linewidth = 10) + 
+geom_segment(data=roh_data_10g,aes(x=windowcum,xend=cumto,y=-0.0002,yend=-0.0002,group=chrom),color='blue',linewidth = 10)
+garbage <- dev.off()
+
+p + geom_segment(data=roh_data_5g,aes(x=windowcum,xend=cumto,y=-0.0002,yend=-0.0002,group=chrom),color='red',linewidth = 10) + 
+geom_segment(data=roh_data_10g,aes(x=windowcum,xend=cumto,y=-0.0002,yend=-0.0002,group=chrom),color='blue',linewidth = 10)
+
+```
+ 
+ Bar plots of per-site heterozygosity and histograms of heterozygosity per window show that some individuals have extended ROH. Also note the excess number of windows with zero heterozygosity in several individuals indicating windows within large ROH.
+
+We will now examine results from **PSMC** of high-coverage genomes. Recommended filters for running PSMC are to use individuals with a high mean genome coverage (>18 x) to reduce sampling bias due to low read coverage over regions, as well as filtering for high read quality and mapping quality (q20 and Q20 in bcftools), and only examining chromosome-level sequences (here, the 18 autosomes of B. affinis). I have plotted both the PSMC results for all 19 high-coverage individuals, and for 4 individuals from 4 different sampling time points for ease of viewing. 
+
+```{r Examine PSMC results, echo=FALSE, out.width='100%', fig.align='center'}
+knitr::include_graphics("analysis/psmc/plots_from_psmc/combined_Bombus_franklini_q20Q20_highCov_n19.psmc_plot.jpg")
+
+knitr::include_graphics("analysis/psmc/plots_from_psmc/combined_Bombus_franklini_q20Q20_highCov_n4_new.psmc_plot.jpg")
+
+#knitr::include_graphics("analysis/psmc/plots_from_psmc/combined_Bombus_franklini_q20Q20_highCov_n4_wBootstrap.psmc_plot.jpg")
+```
+
+```{r Calculate fold-change for PSMC effective pop sizes, echo=FALSE}
+
+file_list <- list.files(path = "analysis/psmc/raw_effective_pop_sizes/", pattern = "*.txt", full.names = TRUE)
+
+# extract index id and sample id
+
+results_ids <- data.frame(
+  index=seq_along(file_list),
+  id=gsub("\\.psmc_plot.*","",basename(file_list))
+)
+
+# Function to read and combine data from psmc_output files
+combined_data_ne <- lapply(file_list, function(file){
+  read.table(file,header=FALSE,sep="\t")
+}) %>%
+                 bind_rows(.id = "file_id")
+
+combined_data_ne <- combined_data_ne[,1:3] # extract first 3 columns
+combined_data_ne <- combined_data_ne %>% filter(V1>=10000) # extract times older than 10k years ago
+combined_data_ne$file_id <- as.numeric(combined_data_ne$file_id)
+
+# define function to find the ratio of min and max V2 (or effective pop size) values
+
+calculate_v2_ratios <- function(data){
+  # initialize a result data frame
+  result <- data.frame(file_id=integer(),ratio=numeric(),stringsAsFactors=FALSE)
+  
+  # iterate through each unique file_id
+  for (id in unique(data$file_id)) {
+    # sbset the data for the current file_id
+    subset_data <- subset(data,file_id==id)
+    
+    # find the min and max V2 (pop size) values and corresponding times
+    min_V2 <- min(subset_data$V2)
+    max_V2 <- max(subset_data$V2)
+    min_V2_time <- min(subset(subset_data,V2==min_V2)[,2])
+    max_V2_time <- max(subset(subset_data,V2==max_V2)[,2])
+    max_V2_30kya <- max(subset(subset_data,V1<=30000)[,3])
+    
+    # calculate the ratio
+    ratio <- max_V2/min_V2
+    
+    # append results to the results data frame
+    result <- rbind(result,data.frame(file_id=id, ratio=ratio, min_Ne=min_V2, max_Ne=max_V2,min_time=min_V2_time,max_time=max_V2_time,max_Ne_30kya=max_V2_30kya))
+  }
+return(result)
+  }
+
+result_combined_data_ne <- calculate_v2_ratios(combined_data_ne)
+result_combined_data_ne_final <- merge(result_combined_data_ne,results_ids,by.x="file_id",by.y="index")
+
+write.table(result_combined_data_ne_final,file="analysis/psmc/output_of_fold_changes_pop_size.txt",sep="\t",quote=FALSE,col.names=TRUE,row.names=FALSE)
+
+mean(result_combined_data_ne_final$ratio)
+max(result_combined_data_ne_final$ratio)
+min(result_combined_data_ne_final$ratio)
+sd(result_combined_data_ne_final$ratio)
+
+# mean & sd Ne at low point
+mean(result_combined_data_ne_final$min_Ne)
+sd(result_combined_data_ne_final$min_Ne)
+
+# mean & sd Ne at most recent increase, within 30kya
+
+mean(result_combined_data_ne_final$max_Ne_30kya)
+sd(result_combined_data_ne_final$max_Ne_30kya)
+
+# mean max pop size and corresponding time
+mean(result_combined_data_ne_final$max_Ne)
+sd(result_combined_data_ne_final$max_Ne)
+
+mean(result_combined_data_ne_final$max_time)
+sd(result_combined_data_ne_final$max_time)
+
+```
+
+
+```{r Visualize GONE results with bootstrap, echo=FALSE}
+
+# List all the files
+file_list <- list.files(path = "analysis/gone_demography/outputs_bootstrap_n15", pattern = "*.txt", full.names = TRUE)
+
+# Function to read and combine data
+combined_data <- lapply(file_list, function(file){
+  read.table(file,header=TRUE,sep="\t",skip=1)
+}) %>%
+                 bind_rows(.id = "file_id")
+
+# Summarize the data
+summary_data <- combined_data %>%
+  group_by(Generation) %>%
+  summarize(
+    mean_geometric = mean(Geometric_mean, na.rm = TRUE),
+    ci_lower = quantile(Geometric_mean, probs = 0.025, na.rm = TRUE),
+    ci_upper = quantile(Geometric_mean, probs = 0.975, na.rm = TRUE)
+  )
+
+summary_data$rescaled_ne <- summary_data$mean_geometric/10000
+summary_data$rescaled_lower <- summary_data$ci_lower/10000
+summary_data$rescaled_upper <- summary_data$ci_upper/10000
+
+# Plot using ggplot2
+p <- ggplot(summary_data, aes(x = Generation, y = rescaled_ne)) +
+  geom_line(color = "firebrick3") +
+  #geom_ribbon(aes(ymin = rescaled_lower, ymax = rescaled_upper), alpha = 0.2, fill = "blue") +
+  geom_line(aes(y=rescaled_lower),linetype='dashed',color = "firebrick3",alpha=0.5) + 
+  geom_line(aes(y=rescaled_upper),linetype='dashed',color = "firebrick3",alpha=0.5) + 
+  labs(title = "Effective Population Size with 95% Confidence Intervals",
+       x = "Years Ago (1 gen/year)",
+       y = "Effective population size (x10^4)") +
+  theme_minimal() + 
+  scale_x_continuous(breaks=c(0,100,200,300,400,500,600,700)) 
+
+# plot periods corresponding to min 1950 time
+pdf(file="analysis/gone_demography/gone_demography_maxMissing75_100bootstrap_n15resample_min1950.pdf",width=14,height=8)
+p+ geom_vline(xintercept=c(100,30,230,200,630,470,700,660),linetype="dashed", color = "yellow")
+garbage <- dev.off()
+
+# plot periods corresponding to mean 1978 time
+pdf(file="analysis/gone_demography/gone_demography_maxMissing75_100bootstrap_n15resample_mean1978.pdf",width=14,height=8)
+p+ geom_vline(xintercept=c(128,58,258,228,658,498,728,688),linetype="dashed", color = "yellow")
+garbage <- dev.off()
+
+# plot periods corresponding to max 1998 time
+pdf(file="analysis/gone_demography/gone_demography_maxMissing75_100bootstrap_n15resample_max1998.pdf",width=14,height=8)
+p+ geom_vline(xintercept=c(148,78,278,248,678,518,748,708),linetype="dashed", color = "yellow")
+garbage <- dev.off()
+
+p
+
+# fold difference between effective pop size at 400 vs 100 years prior
+
+(subset(summary_data,Generation==400)[2])/(subset(summary_data,Generation==100)[2])
+
+```
+```{r GONE analysis split pre post 1990, echo=FALSE}
+
+pre1998 <- read.table("analysis/gone_demography_split_years/Output_Ne_bombus_franklini_combined_PASS_n25_maxMissing75_minDP15_noSing_var_pre1998",header=TRUE,skip=1)
+post1998<- read.table("analysis/gone_demography_split_years/Output_Ne_bombus_franklini_combined_PASS_n25_maxMissing75_minDP15_noSing_var_post1998",header=TRUE,skip=1)
+
+# Plot using ggplot2
+p1 <- ggplot(pre1998, aes(x = Generation, y = Geometric_mean/10000)) +
+  geom_line(color = "firebrick3") +
+  #geom_ribbon(aes(ymin = rescaled_lower, ymax = rescaled_upper), alpha = 0.2, fill = "blue") +
+  #geom_line(aes(y=rescaled_lower),linetype='dashed',color = "firebrick3",alpha=0.5) + 
+  #geom_line(aes(y=rescaled_upper),linetype='dashed',color = "firebrick3",alpha=0.5) + 
+  labs(title = "Effective Population Size Pre-pathogen",
+       x = "Years Ago (1 gen/year)",
+       y = "Effective population size (x10^4)") +
+  theme_minimal() + 
+  scale_x_continuous(breaks=c(0,100,200,300,400,500,600,700)) 
+p1
+
+# plot periods corresponding to pre1998 time
+pdf(file="analysis/gone_demography_split_years/gone_demography_maxMissing75_100bootstrap_pre1998.pdf",width=14,height=8)
+p1
+garbage <- dev.off()
+
+
+p2 <- ggplot(post1998, aes(x = Generation, y = Geometric_mean/10000)) +
+  geom_line(color = "firebrick3") +
+  #geom_ribbon(aes(ymin = rescaled_lower, ymax = rescaled_upper), alpha = 0.2, fill = "blue") +
+  #geom_line(aes(y=rescaled_lower),linetype='dashed',color = "firebrick3",alpha=0.5) + 
+  #geom_line(aes(y=rescaled_upper),linetype='dashed',color = "firebrick3",alpha=0.5) + 
+  labs(title = "Effective Population Size Post-pathogen",
+       x = "Years Ago (1 gen/year)",
+       y = "Effective population size (x10^4)") +
+  theme_minimal() + 
+  scale_x_continuous(breaks=c(0,100,200,300,400,500,600,700)) 
+p2
+
+pdf(file="analysis/gone_demography_split_years/gone_demography_maxMissing75_100bootstrap_post1998.pdf",width=14,height=8)
+p2
+garbage <- dev.off()
+
+```
+
+
+```{r Comparison to B. franklini reference, echo=FALSE }
+
+## depth
+
+depth_1_bf <- read.table("bfrank_ref/analysis/stats_vcftools/bombus_franklini_bfrank_ref_combined_PASS.idepth",header=TRUE)
+depth_2_bf <- read.table("bfrank_ref/analysis/stats_vcftools/bombus_franklini_bfrank_ref_combined_PASS_n31_maxMissing75_minDP15_noSing.idepth",header=TRUE)
+depth_3_bf <- read.table("bfrank_ref/analysis/stats_vcftools/bombus_franklini_bfrank_ref_combined_PASS_n31_maxMissing75_minDP15_noSing.idepth",header=TRUE)
+depth_4_bf <- read.table("bfrank_ref/analysis/stats_vcftools/bombus_franklini_bfrank_ref_combined_PASS_n25_maxMissing75_minDP15_noSing.idepth",header=TRUE)
+depth_5_bf <- read.table("bfrank_ref/analysis/stats_vcftools/bombus_franklini_bfrank_ref_combined_PASS_n25_maxMissing100_minDP15_noSing.idepth",header=TRUE)
+
+depth_1_bf$myFilter <- c("F1 bf")
+depth_2_bf$myFilter <- c("F2 bf")
+depth_3_bf$myFilter <- c("F3 bf")
+depth_4_bf$myFilter <- c("F4 bf")
+depth_5_bf$myFilter <- c("F5 bf")
+
+depth_all_comb <- rbind(depth_1,depth_2,depth_3,depth_4,depth_5,depth_1_bf,depth_2_bf,depth_3_bf,depth_4_bf,depth_5_bf)
+
+pdf(file="analysis/stats_plots/stats_by_filters_violin_plots_depth_comp_with_bfrank_ref.pdf")
+p <- ggplot(data=depth_all_comb, aes(x=myFilter, y=MEAN_DEPTH,col=myFilter)) +
+  geom_violin() + geom_jitter(height = 0, width = 0.1) + theme(legend.position="top") + labs(y = "Mean Depth of Coverage",title="Comparison of depth of coverage with B. affinis and B. franklini reference genomes")
+p
+garbage <- dev.off()
+
+p
+
+## missingness
+
+# updated with plink output file
+miss_1_bf <- read.table("bfrank_ref/analysis/plink/bombus_franklini_bfrank_ref_combined_PASS.smiss",header=TRUE)
+miss_2_bf <- read.table("bfrank_ref/analysis/plink/bombus_franklini_bfrank_ref_combined_PASS_n31_maxMissing75_minDP15_noSing.smiss",header=TRUE)
+miss_3_bf <- read.table("bfrank_ref/analysis/plink/bombus_franklini_bfrank_ref_combined_PASS_n31_maxMissing75_minDP15_noSing.smiss",header=TRUE)
+miss_4_bf <- read.table("bfrank_ref/analysis/plink/bombus_franklini_bfrank_ref_combined_PASS_n25_maxMissing75_minDP15_noSing.smiss",header=TRUE)
+miss_5_bf <- read.table("bfrank_ref/analysis/plink/bombus_franklini_bfrank_ref_combined_PASS_n25_maxMissing100_minDP15_noSing.smiss",header=TRUE)
+  
+miss_1_bf$myFilter <- c("F1 bf")
+miss_2_bf$myFilter <- c("F2 bf")
+miss_3_bf$myFilter <- c("F3 bf")
+miss_4_bf$myFilter <- c("F4 bf")
+miss_5_bf$myFilter <- c("F5 bf")
+
+miss_all_bf <- rbind(miss_1, miss_2, miss_3, miss_4, miss_5,miss_1_bf, miss_2_bf, miss_3_bf, miss_4_bf, miss_5_bf)
+
+my_labels <- c(paste("F1 (",format(miss_1[1,4],big.mark=",",scientific=FALSE),")",sep=''),paste("F2 (",format(miss_2[1,4],big.mark=",",scientific=FALSE),")",sep=''),paste("F3 (",format(miss_3[1,4],big.mark=",",scientific=FALSE),")",sep=''),paste("F4 (",format(miss_4[1,4],big.mark=",",scientific=FALSE),")",sep=''),paste("F5 (",format(miss_5[1,4],big.mark=",",scientific=FALSE),")",sep=''),paste("F1 bf(",format(miss_1_bf[1,4],big.mark=",",scientific=FALSE),")",sep=''),paste("F2 bf (",format(miss_2_bf[1,4],big.mark=",",scientific=FALSE),")",sep=''),paste("F3 bf (",format(miss_3_bf[1,4],big.mark=",",scientific=FALSE),")",sep=''),paste("F4 bf (",format(miss_4_bf[1,4],big.mark=",",scientific=FALSE),")",sep=''),paste("F5 bf (",format(miss_5_bf[1,4],big.mark=",",scientific=FALSE),")",sep=''))
+
+pdf(file="analysis/stats_plots/stats_by_filters_violin_plots_miss_comp_with_bfrank_ref.pdf")
+q <-ggplot(data=miss_all_bf, aes(x=myFilter, y=F_MISS,col=myFilter)) +
+ geom_violin() + geom_jitter(height = 0, width = 0.1) + theme(legend.position="top",axis.text.x = element_text(size=8,angle=45,hjust=1)) + scale_x_discrete(labels=sort(my_labels)) + labs(y = "Fraction Missing Sites",title="Comparison of missingness with B. affinis and B. franklini reference genomes")
+q
+garbage <- dev.off()
+
+q
+
+# genome-wide het
+
+genomehet_1_bf <- read.table("bfrank_ref/analysis/plink/bombus_franklini_bfrank_ref_combined_PASS_het.scount",header=TRUE)
+genomehet_2_bf <- read.table("bfrank_ref/analysis/plink/bombus_franklini_bfrank_ref_combined_PASS_n31_maxMissing75_minDP15_noSing_het.scount",header=TRUE)
+genomehet_3_bf <- read.table("bfrank_ref/analysis/plink/bombus_franklini_bfrank_ref_combined_PASS_n31_maxMissing75_minDP15_noSing_het.scount",header=TRUE)
+genomehet_4_bf <- read.table("bfrank_ref/analysis/plink/bombus_franklini_bfrank_ref_combined_PASS_n25_maxMissing75_minDP15_noSing_het.scount",header=TRUE)
+genomehet_5_bf <- read.table("bfrank_ref/analysis/plink/bombus_franklini_bfrank_ref_combined_PASS_n25_maxMissing100_minDP15_noSing_het.scount",header=TRUE)
+
+genomehet_1_bf$myFilter <- c("F1 bf")
+genomehet_2_bf$myFilter <- c("F2 bf")
+genomehet_3_bf$myFilter <- c("F3 bf")
+genomehet_4_bf$myFilter <- c("F4 bf")
+genomehet_5_bf$myFilter <- c("F5 bf")
+
+# calculate heterozygosity
+genomehet_1_bf$total <- genomehet_1_bf$HOM_CT + genomehet_1_bf$HET_CT
+genomehet_1_bf$het <- genomehet_1_bf$HET_CT/genomehet_1_bf$total
+
+genomehet_2_bf$total <- genomehet_2_bf$HOM_CT + genomehet_2_bf$HET_CT
+genomehet_2_bf$het <- genomehet_2_bf$HET_CT/genomehet_2_bf$total
+
+genomehet_3_bf$total <- genomehet_3_bf$HOM_CT + genomehet_3_bf$HET_CT
+genomehet_3_bf$het <- genomehet_3_bf$HET_CT/genomehet_3_bf$total
+
+genomehet_4_bf$total <- genomehet_4_bf$HOM_CT + genomehet_4_bf$HET_CT
+genomehet_4_bf$het <- genomehet_4_bf$HET_CT/genomehet_4_bf$total
+
+genomehet_5_bf$total <- genomehet_5_bf$HOM_CT + genomehet_5_bf$HET_CT
+genomehet_5_bf$het <- genomehet_5_bf$HET_CT/genomehet_5_bf$total
+
+genomehet_all_bf <- rbind(genomehet_1, genomehet_2, genomehet_3, genomehet_4, genomehet_5,genomehet_1_bf, genomehet_2_bf, genomehet_3_bf, genomehet_4_bf, genomehet_5_bf)
+
+
+pdf(file="analysis/stats_plots/stats_by_filters_violin_plots_het_genomewide_comp_with_bfrank_ref.pdf")
+s <- ggplot(data=genomehet_all_bf, aes(x=myFilter, y=het,col=myFilter)) +
+ geom_violin() + geom_jitter(height = 0, width = 0.1) + theme(legend.position="top") + labs(y = "Genome-wide Heterozygosity",title="Comparison of heterozygosity with B. affinis and B. franklini reference genomes")
+s
+garbage <- dev.off()
+
+s
+
+pdf(file="analysis/stats_plots/stats_by_filters_violin_plots_het_genomewide_F4comp_with_bfrank_ref.pdf")
+ggplot(data=genomehet_4_bf, aes(x=myFilter, y=het)) +
+ geom_violin() + geom_jitter(height = 0, width = 0.1) + theme(legend.position="top") + labs(y = "Genome-wide Heterozygosity") 
+garbage <- dev.off()
+
+# PCA
+
+# with F5
+
+pca_F5_bf <-  read.table("bfrank_ref/analysis/plink/bombus_franklini_bfrank_ref_combined_PASS_n25_maxMissing100_minDP15_noSing_0.3.eigenvec",head=TRUE)
+
+colnames(pca_F5_bf) <- c("sample","extra","PC1","PC2","PC3","PC4","PC5","PC6","PC7","PC8","PC9","PC10")
+
+pca_F5_bf_meta <- merge(stats_meta,pca_F5_bf,by.x="SampleID",by.y="sample")
+
+pca_F5_bf_meta$ShortID <- substring(pca_F5_bf_meta$SampleID,18)
+
+# plot 
+
+pdf(file="analysis/stats_plots/bombus_franklini_pca_F5_0.3_comp_with_bfrank_ref.pdf")
+p <- ggplot(pca_F5_bf_meta, aes(x=PC1, y=PC2, color=as.character(CollectionYr), label=ShortID,shape=LocalityShort)) +
+  geom_point(size=3) + scale_color_manual(values=c("cornsilk4","darkorange1","red","green2","mediumaquamarine","gold","cadetblue1","gray")) + theme(legend.position="top") + ggtitle("PCA of F5 SNPs with B. franklini ref (n=25, no missing data, 17,867 LD-pruned SNPs)")
+p
+garbage <- dev.off()
+
+p
+
+# with text labels
+
+pdf(file="analysis/stats_plots/bombus_franklini_pca_F5_0.3_labels_comp_with_bfrank_ref.pdf")
+p +  geom_text(col="black",size=2,angle=45,nudge_y=0.05,nudge_x=0.07) 
+garbage <- dev.off()
+
+```
+
+```{r blobtools results, echo=FALSE}
+
+blob <- read.table("analysis/blobtools_results/blobtools_pathogen_counts.txt",header=TRUE)
+
+plot(blob$Year,blob$Num_unique_pathogen_matches,xlab="Collection Year",ylab="Number unique pathogen matches")
+
+summary(lm(Num_unique_pathogen_matches ~ Year,blob))
+
+summary(lm(Pathogen_present ~ Year,blob))
+
+
+```
+
+```{r Msprime simulations: non-pathogen demographic model 100 reps, echo=FALSE }
+
+file_list_het <- list.files(path = "analysis/msprime_simulated_data/simulations_output_nonpathogen_demography/simulations_het_values/", pattern = "*.csv", full.names = TRUE, include.dirs=TRUE,recursive=TRUE)
+
+# Function to read and combine data
+combined_data_het <- lapply(file_list_het, function(file){
+  read.table(file,header=TRUE,sep=",")
+}) %>%
+                 bind_rows(.id = "file_id")
+
+# Summarize the data
+summary_data <- combined_data_het %>%
+  group_by(Individual) %>%
+  summarize(
+    mean_geometric = mean(Heterozygosity, na.rm = TRUE),
+    ci_lower = quantile(Heterozygosity, probs = 0.025, na.rm = TRUE),
+    ci_upper = quantile(Heterozygosity, probs = 0.975, na.rm = TRUE)
+  )
+
+# read the samples year lookup
+tsk_lookup <- read.table("analysis/msprime_simulated_data/simulations_output_nonpathogen_demography/sample_year_lookup.txt",header=TRUE)
+
+combined_data_het_w_year <- merge(tsk_lookup,combined_data_het,by="Individual")
+
+summary_data_w_year <- merge(tsk_lookup,summary_data,by="Individual")
+
+r <- ggplot(combined_data_het_w_year, aes(x = CollectionYear, y = Heterozygosity, group=file_id)) +
+  geom_smooth(method=lm,level=0.95,col="black",alpha=0.25,linewidth=0.1) +
+  geom_point(color = "blue",alpha=0.75) +
+  labs(title = "Genome-wide heterozygosity from non-pathogen bottleneck simulations (100 reps)",
+       x = "Simulated Sampling Year",
+       y = "Heterozygosity") +
+  theme_minimal()
+r
+
+pdf(file="analysis/msprime_simulated_data/Figure_plot_nonpathogen_demography_het_values_with_best_fit_lines.pdf",width=4,height=3)
+r
+garbage <- dev.off()
+
+summary(lm(mean_geometric ~ CollectionYear,summary_data_w_year))
+
+summary(lm(Heterozygosity ~ CollectionYear,combined_data_het_w_year))
+
+
+ggplot(combined_data_het_w_year, aes(x = CollectionYear, y = Heterozygosity)) + 
+  geom_boxplot(aes(group=CollectionYear)) + theme(legend.position="top") + 
+  geom_smooth(method=lm,level=0.95,col="black",alpha=0.25,linewidth=1)
+
+
+```
+```{r Msprime simulations: non-pathogen demographic model with higher mut rate, echo=FALSE}
+
+file_list_het_nonpathogen_highMut_reps <- list.files(path = "analysis/msprime_simulated_data/simulations_historic_bottleneck_mut_rate_9eminus10_het_values/", pattern = "*.csv", full.names = TRUE, include.dirs=TRUE,recursive=TRUE)
+
+# Function to read and combine data
+combined_data_nonpathogen_highMut_reps <- lapply(file_list_het_nonpathogen_highMut_reps, function(file){
+  read.table(file,header=TRUE,sep=",")
+}) %>%
+                 bind_rows(.id = "file_id")
+
+
+# read the samples year lookup
+tsk_lookup <- read.table("analysis/msprime_simulated_data/simulations_output_nonpathogen_demography/sample_year_lookup.txt",header=TRUE)
+
+hist_highMut_w_year <- merge(tsk_lookup,combined_data_nonpathogen_highMut_reps,by="Individual")
+
+z <- ggplot(hist_highMut_w_year, aes(x = CollectionYear, y = Heterozygosity, group=file_id)) +
+  geom_smooth(method=lm,level=0.95,col="black",alpha=0.25,linewidth=0.1) +
+  geom_point(color = "blue",alpha=0.75) +
+  labs(title = "Genome-wide heterozygosity from non-pathogen bottleneck simulations,\n mut. rate: 9e-10 (25 reps)",
+       x = "Simulated Sampling Year",
+       y = "Heterozygosity") +
+  theme_minimal()
+z
+
+pdf(file="analysis/msprime_simulated_data/Figure_plot_nonpathogen_demography_het_value_mut9e-10_25reps.pdf",width=10,height=6)
+z
+garbage <- dev.off()
+
+
+summary(lm(Heterozygosity ~ CollectionYear,hist_highMut_w_year))
+
+
+```
+
+
+```{r Msprime simulations: pathogen demographic model (single reps, all models), echo=FALSE}
+
+file_list_het_pathogen <- list.files(path = "analysis/msprime_simulated_data/simulations_output_pathogen_demography/", pattern = "*.csv", full.names = TRUE, include.dirs=TRUE,recursive=TRUE)
+
+# Function to read and combine data
+combined_data_het_pathogen <- lapply(file_list_het_pathogen, function(file){
+  read.table(file,header=TRUE,sep=",")
+}) %>%
+                 bind_rows(.id = "file_id")
+
+# read the samples year lookup
+tsk_lookup <- read.table("analysis/msprime_simulated_data/simulations_output_nonpathogen_demography/sample_year_lookup.txt",header=TRUE)
+
+combined_data_het_pathogen_w_year <- merge(tsk_lookup,combined_data_het_pathogen,by="Individual")
+
+file_id_lookup <- data.frame(file_id=c(1:20),bottleneck=c("Ne1.6k_mut3.6e-9_strength_16","Ne1.6k_mut3.6e-9_strength_1932","Ne1.6k_mut3.6e-9_strength_217","Ne1.6k_mut3.6e-9_strength_64000","Ne1.6k_mut3.6e-9_strength_8","Ne1.6k_mut9e-10_strength_16","Ne1.6k_mut9e-10_strength_1932","Ne1.6k_mut9e-10_strength_217","Ne1.6k_mut9e-10_strength_64000","Ne1.6k_mut9e-10_strength_8","Ne36k_mut3.6e-9_strength_16","Ne36k_mut3.6e-9_strength_1932","Ne36k_mut3.6e-9_strength_217","Ne36k_mut3.6e-9_strength_64000","Ne36k_mut3.6e-9_strength_8","Ne36k_mut9e-10_strength_16","Ne36k_mut9e-10_strength_1932","Ne36k_mut9e-10_strength_217","Ne36k_mut9e-10_strength_64000","Ne36k_mut9e-10_strength_8"),model=c(rep("Ne1.6k_mut3.6e-9",5),rep("Ne1.6k_mut9e-10",5),rep("Ne36k_mut3.6e-9",5),rep("Ne36k_mut9e-10",5)),strength=c(rep(c("16","1932","217","64000","8"),4)), mut_rate=c(rep("mut3.6e-9",5),rep("mut9e-10",5),rep("mut3.6e-9",5),rep("mut9e-10",5)))
+
+combined_data_het_pathogen_w_year_bottlenecks <- merge(combined_data_het_pathogen_w_year,file_id_lookup,by="file_id")
+combined_data_het_pathogen_w_year_bottlenecks$strength <- factor(combined_data_het_pathogen_w_year_bottlenecks$strength, levels=c("8","16","217","1932","64000"))
+
+#bottleneck_choice <- combined_data_het_pathogen_w_year_bottlenecks[grep("Ne36k_mut9e-10", combined_data_het_pathogen_w_year_bottlenecks$bottleneck), ]
+
+#s <- ggplot(bottleneck_choice, aes(x = CollectionYear, y = Heterozygosity, col=bottleneck)) +
+#  geom_smooth(method=lm,level=0.95) +
+#  geom_point() +
+#  labs(title = "Genome-wide heterozygosity from pathogen bottleneck simulations of varying strength (x reps)",
+#       x = "Simulated Sampling Year",
+#       y = "Heterozygosity") +
+# scale_color_brewer(palette="RdYlBu") + 
+#  scale_fill_brewer(palette="RdYlBu") + 
+#  scale_y_continuous(labels = function(x) format(x, scientific = FALSE)) + 
+#  theme_minimal()
+#s
+
+#pdf(file="analysis/msprime_simulated_data/Figure_plot_pathogen_demography_het_values_with_best_fit_lines_Ne36k_mut9e-10.pdf",width=8,height=6)
+#s
+#garbage <- dev.off()
+
+t <- ggplot(combined_data_het_pathogen_w_year_bottlenecks, aes(x = CollectionYear, y = Heterozygosity,group=strength)) +
+  geom_smooth(method=lm,level=0.95,aes(col=strength)) +
+  geom_point(aes(color=strength)) +
+ # scale_shape_manual(values = c("8" = 18, "16" = 15, "217" = 16, "1932" = 17, "64000" = 8)) +
+  facet_wrap(~model,scales="free_y") + 
+  labs(title = "Genome-wide heterozygosity from pathogen bottleneck simulations of varying strength (1 rep each)",
+       x = "Simulated Sampling Year",
+       y = "Heterozygosity") +
+ scale_color_brewer(palette="RdYlBu", direction = -1) + 
+ scale_fill_brewer(palette="RdYlBu", direction = -1) + 
+ # scale_y_continuous(labels = function(x) format(x, scientific = FALSE)) + 
+  theme_minimal()
+
+t
+
+pdf(file="analysis/msprime_simulated_data/Figure_plot_pathogen_demography_het_values_with_best_fit_lines_all_models.pdf",width=8,height=6)
+t
+garbage <- dev.off()
+
+#summary(lm(Heterozygosity ~ CollectionYear,bottleneck_temp))
+
+# test the significance across all replicates for each strength for the 36k_mut_9e-10 model
+bottleneck_choice <- combined_data_het_pathogen_w_year_bottlenecks[grep("Ne36k_mut9e-10", combined_data_het_pathogen_w_year_bottlenecks$bottleneck), ]
+
+summary(lm(Heterozygosity ~ CollectionYear ,bottleneck_choice[bottleneck_choice$strength=="8",]))
+summary(lm(Heterozygosity ~ CollectionYear,bottleneck_choice[bottleneck_choice$strength=="16",]))
+summary(lm(Heterozygosity ~ CollectionYear,bottleneck_choice[bottleneck_choice$strength=="217",]))
+summary(lm(Heterozygosity ~ CollectionYear,bottleneck_choice[bottleneck_choice$strength=="1932",]))
+summary(lm(Heterozygosity ~ CollectionYear,bottleneck_choice[bottleneck_choice$strength=="64000",]))
+
+
+```
+```{r Msprime simulations: pathogen demographic model (25 reps, Ne26k_mut_rate_3.6e-9), echo=FALSE}
+
+file_list_het_pathogen_reps <- list.files(path = "analysis/msprime_simulated_data/simulations_output_pathogen_demography_w_reps/", pattern = "*.csv", full.names = TRUE, include.dirs=TRUE,recursive=TRUE)
+#file_list_het_pathogen_reps <- list.files(path = "analysis/pathogen_strength_16/", pattern = "*.csv", full.names = TRUE, include.dirs=TRUE,recursive=TRUE)
+
+# Function to read and combine data
+combined_data_het_pathogen_reps <- lapply(file_list_het_pathogen_reps, function(file){
+  read.table(file,header=TRUE,sep=",")
+}) %>%
+                 bind_rows(.id = "file_id")
+
+# read the samples year lookup
+tsk_lookup <- read.table("analysis/msprime_simulated_data/simulations_output_nonpathogen_demography/sample_year_lookup.txt",header=TRUE)
+
+combined_data_het_pathogen_w_year_reps <- merge(tsk_lookup,combined_data_het_pathogen_reps,by="Individual")
+
+file_id_lookup_reps <- data.frame(file_id=c(1:125),model=c(rep("Ne36k_mut3.6e-9",125)),strength=c(rep("16",25),rep("1932",25),rep("217",25),rep("64000",25),rep("8",25)), mut_rate=c(rep("mut3.6e-9",125)))
+
+combined_data_het_pathogen_w_year_bottlenecks_reps <- merge(combined_data_het_pathogen_w_year_reps,file_id_lookup_reps,by="file_id")
+combined_data_het_pathogen_w_year_bottlenecks_reps$strength <- factor(combined_data_het_pathogen_w_year_bottlenecks_reps$strength, levels=c("8","16","217","1932","64000"))
+
+
+u <- ggplot(combined_data_het_pathogen_w_year_bottlenecks_reps, aes(x = CollectionYear, y = Heterozygosity,group=file_id)) +
+ geom_smooth(method=lm,level=0.95,aes(col=strength,fill=strength),col="black",alpha=0.1,linewidth=0.1) +
+  geom_jitter(aes(color=strength),alpha=0.5) +
+  labs(title = "Genome-wide heterozygosity from pathogen bottleneck simulations (Ne36k_mut3.6e-9) (25 reps)",
+       x = "Simulated Sampling Year",
+       y = "Heterozygosity") +
+ scale_color_brewer(palette="RdYlBu", direction = -1) + 
+ scale_fill_brewer(palette="RdYlBu", direction = -1) + 
+ # scale_y_continuous(labels = function(x) format(x, scientific = FALSE)) + 
+  theme_minimal() + 
+  theme(legend.position = "")
+
+pdf(file="analysis/msprime_simulated_data/Figure_plot_pathogen_demography_het_values_with_best_fit_lines_Ne36k_mut3.6e-9_25reps.pdf",width=6,height=4)
+u
+garbage <- dev.off()
+
+v <- ggplot(combined_data_het_pathogen_w_year_bottlenecks_reps, aes(x = CollectionYear, y = Heterozygosity,group=strength)) +
+  geom_smooth(method=lm,level=0.95,aes(col=strength,fill=strength),col="black",alpha=0.1,linewidth=0.1) +
+  geom_jitter(aes(color=strength,alpha=0.5)) +
+  #facet_wrap(~model,scales="free_y") + 
+  labs(title = "Genome-wide heterozygosity from pathogen bottleneck simulations (Ne36k_mut3.6e-9) (25 reps)",
+       x = "Simulated Sampling Year",
+       y = "Heterozygosity") +
+ scale_color_brewer(palette="RdYlBu", direction = -1) + 
+ scale_fill_brewer(palette="RdYlBu", direction = -1) + 
+ # scale_y_continuous(labels = function(x) format(x, scientific = FALSE)) + 
+  theme_minimal()
+
+pdf(file="analysis/msprime_simulated_data/Figure_plot_pathogen_demography_het_values_with_best_fit_lines_Ne36k_mut3.69e-9_25reps_v2.pdf",width=6,height=4)
+v
+garbage <- dev.off()
+
+# test the significance across all replicates for each strength
+
+summary(lm(Heterozygosity ~ CollectionYear ,combined_data_het_pathogen_w_year_bottlenecks_reps[combined_data_het_pathogen_w_year_bottlenecks_reps$strength=="8",]))
+summary(lm(Heterozygosity ~ CollectionYear,combined_data_het_pathogen_w_year_bottlenecks_reps[combined_data_het_pathogen_w_year_bottlenecks_reps$strength=="16",]))
+summary(lm(Heterozygosity ~ CollectionYear,combined_data_het_pathogen_w_year_bottlenecks_reps[combined_data_het_pathogen_w_year_bottlenecks_reps$strength=="217",]))
+summary(lm(Heterozygosity ~ CollectionYear,combined_data_het_pathogen_w_year_bottlenecks_reps[combined_data_het_pathogen_w_year_bottlenecks_reps$strength=="1932",]))
+summary(lm(Heterozygosity ~ CollectionYear,combined_data_het_pathogen_w_year_bottlenecks_reps[combined_data_het_pathogen_w_year_bottlenecks_reps$strength=="64000",]))
+
+
+# test the significance for each replicate within strength 1932
+
+#for (i in 101:200){
+#  subset_data <- combined_data_het_pathogen_w_year_bottlenecks_reps[combined_data_het_pathogen_w_year_bottlenecks_reps$strength=="1932" & combined_data_het_pathogen_w_year_bottlenecks_reps$file_id==i,]
+  
+#  model <- lm(Heterozygosity ~ CollectionYear,data= subset_data)
+#  print(paste("File ID:",i))
+#  print(summary(model))
+#}
+
+# test the significance for each replicate within strength 64000
+
+#for (i in 301:400){
+#  subset_data <- combined_data_het_pathogen_w_year_bottlenecks_reps[combined_data_het_pathogen_w_year_bottlenecks_reps$strength=="64000" & combined_data_het_pathogen_w_year_bottlenecks_reps$file_id==i,]
+  
+#  model <- lm(Heterozygosity ~ CollectionYear,data= subset_data)
+ # print(paste("File ID:",i))
+#  print(summary(model))
+#}
+
+
+```
+
