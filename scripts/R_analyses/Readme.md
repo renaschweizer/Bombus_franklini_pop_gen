@@ -1,0 +1,1 @@
+This directory contains all the commands for analyses performed in R, including filtering exploration, heterozygosity through time, and plotting results from GONE, PSMC, blobtools, etc. analyses, in **bfrank.Md** and the output in **bfrank_02June2025.html** 
