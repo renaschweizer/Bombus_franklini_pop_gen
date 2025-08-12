@@ -1,18 +1,6 @@
 #!/bin/bash
 
 
-#SBATCH -p atlas
-#SBATCH --time=04:00:00   # walltime limit (HH:MM:SS)
-#SBATCH --nodes=1   # number of nodes
-#SBATCH --ntasks-per-node=48   # 20 processor core(s) per node X 2 threads per core
-#SBATCH --partition=atlas    # standard node(s)
-#SBATCH --job-name="FastQC_clean"
-#SBATCH --mail-type=END
-#SBATCH --mail-type=FAIL
-#SBATCH -o FastQC.%a.%A.out                    # File to which stdout will be written
-#SBATCH -e FastQC.%a.%A.err 
-#SBATCH --account=beenome100
-
 # LOAD MODULES, INSERT CODE, AND RUN YOUR PROGRAMS HERE
 module load fastqc/0.11.9
 
