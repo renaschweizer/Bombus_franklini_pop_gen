@@ -1,17 +1,5 @@
 #!/bin/bash
 
-#SBATCH -p atlas
-#SBATCH --time=48:00:00   # walltime limit (HH:MM:SS)
-#SBATCH --nodes=1   # number of nodes
-#SBATCH --ntasks-per-node=48   # 20 processor core(s) per node X 2 threads per core
-#SBATCH --partition=atlas    # standard node(s)
-#SBATCH --job-name="msprime"
-#SBATCH --mail-type=END
-#SBATCH --mail-type=FAIL
-#SBATCH -o msprime.%a.%A.out                    # File to which stdout will be written
-#SBATCH -e msprime.%a.%A.err 
-#SBATCH --account=beenome100
-
 #This script simulates a demography in msprime, then outputs a .vcf for the individuals
 #specified in the "msprime_simulate_demography.py" script. A second python script,
 #"make_consensus_diploid_sequence_from_vcf_one_chrom.py", is then called to generate consensus
