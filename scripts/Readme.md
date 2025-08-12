@@ -1,9 +1,13 @@
-Scripts used to process Bombus franklini data for Schweizer et al., from raw reads to genotypes to analyses. Scripts are organized as follows: 
+#### Scripts are organized as follows:
 
-*genotyping_processing* scripts used to go from raw reads to filtered genotypes. 
++ *genotyping_processing* scripts used to go from raw reads to filtered genotypes.
 
-*simulation_pipeline* includes scripts and files used for the msprime simulations. 
++ *pop_structure* for calculating pop statistics, PCA, admixture.
 
-*bfrank.Md* contains all of the R code for running analyses and generating plots. bfrank_02June2025.html is the output. 
++ *de_novo_assembly* for generating *de novo* genome assemblies and extracting COI sequence.
 
++ *demography* for running PSMC and GONE analyses. 
 
++ *simulation_pipeline* includes scripts and files used for the msprime simulations.
+
++ *R_analyses* contains all of the R code for running analyses and generating plots.
