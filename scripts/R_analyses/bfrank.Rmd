@@ -94,7 +94,7 @@ plot(eco.regions_reprojected$geometry,add=TRUE)
 
 # plot all known specimens
 
-for (x in 1:nrow(samples)) {points(samples$longitude[x],samples$latitude[x],col="gray",pch=16,cex=1)}
+for (x in 1:nrow(samples)) {points(samples$longitude[x],samples$latitude[x],col="black",pch=21,cex=1)}
 
 # plot sequenced sample locations all same size
 for (x in 1:nrow(gps)) {points(jitter(gps$LonDD[x],0.05),jitter(gps$LatDD[x],0.05),col=sapply(gps$CollectionYr[x], plot.point.color),pch=17,cex=2)}
@@ -130,7 +130,7 @@ hist(as.numeric(sub("%","",stats_meta$X.mapped)),breaks=10,xlab="% Mapping Rate"
 
 # coverage by year
 
-pdf(file="sequencing_metrics_illumina_element/bfranklini_coverage_by_year.pdf")
+pdf(file="sequencing_metrics_illumina_element/bfranklini_raw_coverage_by_year.pdf")
 ggplot(stats_meta, aes(x=CollectionYr, y=meanCov.raw)) + 
   geom_point()+
   geom_smooth(method=lm) + labs(y = "Mean Depth of Coverage (Raw)")
@@ -140,11 +140,12 @@ ggplot(stats_meta, aes(x=CollectionYr, y=meanCov.raw)) +
   geom_point()+
   geom_smooth(method=lm) + labs(y = "Mean Depth of Coverage (Raw)")
 
+print("Linear model of mean raw coverage vs. collection year")
 summary(lm(meanCov.raw ~ CollectionYr,stats_meta))
 
 # raw, cleaned reads by year
 
-pdf(file="sequencing_metrics_illumina_element/bfranklini_reads_by_year.pdf")
+pdf(file="sequencing_metrics_illumina_element/bfranklini_mq20_reads_by_year.pdf")
 ggplot(stats_meta, aes(x=CollectionYr, y=uniq.MQ20.PR)) + 
   geom_point()+
   geom_smooth(method=lm) + labs(y = "Number Unique Paired Mapped Reads MQ>20", x="Collection Year")
@@ -154,6 +155,7 @@ ggplot(stats_meta, aes(x=CollectionYr, y=uniq.MQ20.PR)) +
   geom_point()+
   geom_smooth(method=lm) + labs(y = "Number Unique Paired Mapped Reads MQ>20", x="Collection Year")
 
+print("Linear model of number of unique MQ20  paired-end reads vs. collection year")
 summary(lm(uniq.MQ20.PR ~ CollectionYr,stats_meta))
 
 # print statistics
@@ -360,6 +362,51 @@ ggplot() +
 
 It seems as though our depth of coverage filters and removing 6 low-quality individuals has improved our overall data quality. 
 
+We can also check the correlation between DP and specimen age, now that we've filtered the data. 
+
+```{r Filtering exploration: specimen age vs depth of coverage after filtering, echo=FALSE}
+
+# we will merge depth_4 wiith our meta information
+
+depth_4_age <- merge(depth_4,stats_meta[,c(1,3)],by.x="INDV",by.y="SampleID" )
+
+# plot the depth of coverage for filtered sites vs collection year 
+
+t <- ggplot(depth_4_age, aes(x=CollectionYr, y=MEAN_DEPTH)) + 
+  geom_point()+
+  geom_smooth(method=lm) + labs(y = "Mean Depth of Coverage (Filtered, F4)", x="Collection Year")
+t
+
+pdf(file="sequencing_metrics_illumina_element/bfranklini_filt_F4_reads_by_year.pdf")
+t
+garbage <- dev.off()
+
+# test whether there is a significant correlation 
+
+summary(lm(MEAN_DEPTH ~ CollectionYr,depth_4_age))
+
+# we will merge depth_5 wiith our meta information
+
+depth_5_age <- merge(depth_5,stats_meta[,c(1,3)],by.x="INDV",by.y="SampleID" )
+
+# plot the depth of coverage for filtered sites vs collection year 
+
+u <- ggplot(depth_5_age, aes(x=CollectionYr, y=MEAN_DEPTH)) + 
+  geom_point()+
+  geom_smooth(method=lm) + labs(y = "Mean Depth of Coverage (Filtered, F5)", x="Collection Year")
+u
+
+pdf(file="sequencing_metrics_illumina_element/bfranklini_filt_F5_reads_by_year.pdf")
+u
+garbage <- dev.off()
+
+# test whether there is a significant correlation 
+
+summary(lm(MEAN_DEPTH ~ CollectionYr,depth_5_age))
+
+```
+
+
 Next, we look at **Ts/Tv ratios**. Usually, a genome-wide rate of ~2 is expected for vertebrates, although less seems to be known about invertebrates. Lozier 2014 *Molecular Ecology* found a Ts/Tv ratio of ~3.25 in *B. impatiens* and *B. pensylvanicus*. 
 
 ```{r Filtering exploration: Ts/Tv ratio, echo=FALSE}
@@ -449,7 +496,7 @@ Now we can compare the genome-wide heterozygosity to a set of values published i
 ```{r Compare genome-wide het to values from Robinson et al. 2016, echo=FALSE}
 # use data from F4 genome-wide het
 
-johnson_data <- read.table("analysis/Robinson_2016_genomeHet.txt",header=TRUE,sep="\t") 
+johnson_data <- read.table("analysis/Robinson_2016_genomeHet.txt",header=TRUE,sep="\t")
 johnson_het <- johnson_data[johnson_data$Seq_Type == "genome-wide",]
 
 tmp <- as.data.frame(genomehet_4[,c("het")])
@@ -469,13 +516,19 @@ johnson_het_add_means <- johnson_het_add %>%
   group_by(Species) %>%
   summarise(Observed_π_species = mean(Observed_π),Common_Name=max(Common_Name),Kingdom=max(Kingdom),Seq_Type=max(Seq_Type),Source=max(Source),Insect=max(Insect))
 
-# plot and group by kingdom
-ggplot(johnson_het_add_means, aes(x=Observed_π_species,color=Insect,fill=Insect)) +
-  geom_histogram(position="identity", alpha=0.50,bins=50) + geom_vline(xintercept=mean(genomehet_4$het),linetype="dashed", color = "black") + scale_x_continuous(trans = "log10",labels = function(x) format(x, scientific = FALSE)) + labs(x = "Genome-wide Heterozygosity",y="Frequency")+ geom_text(aes(x=mean(genomehet_4$het), label="B. franklini", y=5.3), colour="black", vjust = 1.2) + theme_bw() 
+# add in info from Lozier et al. 2023 for B. vancouverensis
+
+new_row <- data.frame(Species = "Bombus_vancouverensis", Observed_π_species = 0.00303, Common_Name="Vancouver_Bumblebee",Kingdom="animal",Seq_Type="genome-wide", Source="Lozier_2023",Insect="yes")
+johnson_het_add_means <- rbind(johnson_het_add_means, new_row)
+
+
+# plot and group by Insect
+i <- ggplot(johnson_het_add_means, aes(x=Observed_π_species,color=Insect,fill=Insect)) +
+  geom_histogram(position="identity", alpha=0.75,bins=50) + geom_vline(xintercept=mean(genomehet_4$het),linetype="dashed", color = "black") + scale_x_continuous(trans = "log10",labels = function(x) format(x, scientific = FALSE)) + labs(x = "Genome-wide Heterozygosity",y="Frequency")+ geom_text(aes(x=mean(genomehet_4$het), label="B. franklini", y=5.3), colour="black", vjust = 1.2) + theme_bw() + scale_fill_manual(values = c("yes" = "#1f78b4", "no" = "#a6cee3")) + scale_color_manual(values = c("yes" = "#1f78b4", "no" = "#a6cee3"))
+i
 
 pdf(file="analysis/stats_plots/genome_het_compared_to_Johnson_data.pdf")
-ggplot(johnson_het_add_means, aes(x=Observed_π_species,color=Insect,fill=Insect)) +
-  geom_histogram(position="identity", alpha=0.50,bins=50) + geom_vline(xintercept=mean(genomehet_4$het),linetype="dashed", color = "black") + scale_x_continuous(trans = "log10",labels = function(x) format(x, scientific = FALSE)) + labs(x = "Genome-wide Heterozygosity",y="Frequency") + geom_text(aes(x=mean(genomehet_4$het), label="B. franklini", y=5.3), colour="black", vjust = 1.2) + theme_bw() 
+i
 garbage <- dev.off()
 
 pdf(file="analysis/stats_plots/genome_het_compared_to_Johnson_data_uncolored.pdf")
@@ -1258,48 +1311,6 @@ p
 (subset(summary_data,Generation==400)[2])/(subset(summary_data,Generation==100)[2])
 
 ```
-```{r GONE analysis split pre post 1990, echo=FALSE}
-
-pre1998 <- read.table("analysis/gone_demography_split_years/Output_Ne_bombus_franklini_combined_PASS_n25_maxMissing75_minDP15_noSing_var_pre1998",header=TRUE,skip=1)
-post1998<- read.table("analysis/gone_demography_split_years/Output_Ne_bombus_franklini_combined_PASS_n25_maxMissing75_minDP15_noSing_var_post1998",header=TRUE,skip=1)
-
-# Plot using ggplot2
-p1 <- ggplot(pre1998, aes(x = Generation, y = Geometric_mean/10000)) +
-  geom_line(color = "firebrick3") +
-  #geom_ribbon(aes(ymin = rescaled_lower, ymax = rescaled_upper), alpha = 0.2, fill = "blue") +
-  #geom_line(aes(y=rescaled_lower),linetype='dashed',color = "firebrick3",alpha=0.5) + 
-  #geom_line(aes(y=rescaled_upper),linetype='dashed',color = "firebrick3",alpha=0.5) + 
-  labs(title = "Effective Population Size Pre-pathogen",
-       x = "Years Ago (1 gen/year)",
-       y = "Effective population size (x10^4)") +
-  theme_minimal() + 
-  scale_x_continuous(breaks=c(0,100,200,300,400,500,600,700)) 
-p1
-
-# plot periods corresponding to pre1998 time
-pdf(file="analysis/gone_demography_split_years/gone_demography_maxMissing75_100bootstrap_pre1998.pdf",width=14,height=8)
-p1
-garbage <- dev.off()
-
-
-p2 <- ggplot(post1998, aes(x = Generation, y = Geometric_mean/10000)) +
-  geom_line(color = "firebrick3") +
-  #geom_ribbon(aes(ymin = rescaled_lower, ymax = rescaled_upper), alpha = 0.2, fill = "blue") +
-  #geom_line(aes(y=rescaled_lower),linetype='dashed',color = "firebrick3",alpha=0.5) + 
-  #geom_line(aes(y=rescaled_upper),linetype='dashed',color = "firebrick3",alpha=0.5) + 
-  labs(title = "Effective Population Size Post-pathogen",
-       x = "Years Ago (1 gen/year)",
-       y = "Effective population size (x10^4)") +
-  theme_minimal() + 
-  scale_x_continuous(breaks=c(0,100,200,300,400,500,600,700)) 
-p2
-
-pdf(file="analysis/gone_demography_split_years/gone_demography_maxMissing75_100bootstrap_post1998.pdf",width=14,height=8)
-p2
-garbage <- dev.off()
-
-```
-
 
 ```{r Comparison to B. franklini reference, echo=FALSE }
 
