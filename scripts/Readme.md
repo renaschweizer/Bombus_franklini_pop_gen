@@ -6,7 +6,9 @@
 
 + *de_novo_assembly* for generating *de novo* genome assemblies and extracting COI sequence.
 
-+ *demography* for running PSMC and GONE analyses. 
++ *demography* for running PSMC and GONE analyses.
+
++ *relatedness* for measuring relatedness with KING in PLINK and measuring runs of homozygosity with bcftools.
 
 + *simulation_pipeline* includes scripts and files used for the msprime simulations.
 
