@@ -1,4 +1,4 @@
-#### Follow **runs of homozygosity** calculations from Robinson et al. 2022: https://github.com/jarobin/vaquitagenomics2022/blob/v1/runs_of_homozygosity/runs_of_homozygosity_vaquita.sh
+# Follow **runs of homozygosity** calculations from Robinson et al. 2022: https://github.com/jarobin/vaquitagenomics2022/blob/v1/runs_of_homozygosity/runs_of_homozygosity_vaquita.sh
 
 cd runs_of_homozygosity
 cp ../filt_all/bombus_franklini_combined_PASS_n25_maxMissing75_minDP15_noSing.recode.vcf . 
@@ -35,7 +35,7 @@ zcat ${DATA} \
 | awk -v s=${SAMPLE} 'BEGIN{sum=0}{if ($2==s && $6>=1e6){sum+=$6; num+=1}}END{printf "%s\t%s\t%s\t%s\n", s, sum/279879617, num, sum}'
 done < samples.list >> roh_greater1Mb.txt
 
-# Calculate Froh using max length calculated from pseudo-genome
+# Calculate Froh using max length calculated from pseudo-genome, chromosomes only
 DATA=bombus_franklini_combined_PASS_n25_maxMissing75_minDP15_noSing.recode.vcf_bcftoolsROH.txt.gz
 while read -r SAMPLE ; do 
 zcat ${DATA} \
@@ -44,13 +44,8 @@ done < samples.list >> roh_greater1Mb_chrOnly.txt
 
 
 
-# Calculate Froh using max length calculated from pseudo-genome
-DATA=bombus_franklini_combined_PASS_n25_maxMissing75_minDP15_noSing.recode.vcf_bcftoolsROH.txt.gz
-while read -r SAMPLE ; do 
-zcat ${DATA} \
-| awk -v s=${SAMPLE} 'BEGIN{sum=0}{if ($2==s && $6>=1){sum+=$6; num+=1}}END{printf "%s\t%s\t%s\t%s\n", s, sum/280441329, num, sum}'
-done < samples.list >> roh.txt
+# subset to only 18 chromosomes for detectRUNS
 
-# subset to only 18 chromosomes
-
-zcat bombus_franklini_combined_PASS_n25_maxMissing75_minDP15_noSing.recode.vcf_bcftoolsROH.txt.gz | egrep "NC_066344.1|NC_066345.1|NC_066346.1|NC_066347.1|NC_066348.1|NC_066349.1|NC_066350.1|NC_066351.1|NC_066352.1|NC_066353.1|NC_066354.1|NC_066355.1|NC_066356.1|NC_066357.1|NC_066358.1|NC_066359.1|NC_066360.1|NC_066361.1" | cat head2.tmp - | gzip - >  bombus_franklini_combined_PASS_n25_maxMissing75_minDP15_noSing.recode.vcf_bcftoolsROH_chr.txt.gz
+zcat bombus_franklini_combined_PASS_n25_maxMissing75_minDP15_noSing.recode.vcf_bcftoolsROH.txt.gz \
+| egrep "NC_066344.1|NC_066345.1|NC_066346.1|NC_066347.1|NC_066348.1|NC_066349.1|NC_066350.1|NC_066351.1|NC_066352.1|NC_066353.1|NC_066354.1|NC_066355.1|NC_066356.1|NC_066357.1|NC_066358.1|NC_066359.1|NC_066360.1|NC_066361.1" \
+| cat head2.tmp - | gzip - >  bombus_franklini_combined_PASS_n25_maxMissing75_minDP15_noSing.recode.vcf_bcftoolsROH_chr.txt.gz
