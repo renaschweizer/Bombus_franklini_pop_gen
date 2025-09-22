@@ -1,5 +1,14 @@
 #!/bin/bash
 
+#SBATCH --time=04:00:00   
+#SBATCH --nodes=1   
+#SBATCH --ntasks-per-node=48   
+#SBATCH --job-name="FastQC_clean"
+#SBATCH --mail-type=END
+#SBATCH --mail-type=FAIL
+#SBATCH -o FastQC.%a.%A.out                    
+#SBATCH -e FastQC.%a.%A.err 
+
 
 # LOAD MODULES, INSERT CODE, AND RUN YOUR PROGRAMS HERE
 module load fastqc/0.11.9
