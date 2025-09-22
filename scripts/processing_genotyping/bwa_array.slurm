@@ -1,6 +1,15 @@
 #!/bin/bash
 
-# usage: sbatch --array=19-66 --export=species='bombus_affinis' ~/scripts/bwa_array.slurm
+#SBATCH --time=48:00:00   # walltime limit (HH:MM:SS)
+#SBATCH --nodes=1   # number of nodes
+#SBATCH --ntasks-per-node=48   
+#SBATCH --job-name="bwa"
+#SBATCH --mail-type=END
+#SBATCH --mail-type=FAIL
+#SBATCH -o bwa.%a.%A.out                    # File to which stdout will be written
+#SBATCH -e bwa.%a.%A.err 
+
+# usage: sbatch --array=1-66 --export=species='bombus_franklini' ~/scripts/bwa_array.slurm
 # LOAD MODULES, INSERT CODE, AND RUN YOUR PROGRAMS HERE
 
 module load apptainer/1.1.6
