@@ -6,10 +6,9 @@ module load fastqc/0.11.9
 
 wd=/90daydata/beenome100/rena_in_progress/${species}
 
-# Specify the path to the config file
+# Specify the path to the config file to run fastqc on raw or trimmed reads
 #config=${wd}/config_files/raw_fastq_array.txt
 config=${wd}/config_files/fastq_trimmed_array.txt
-#config=${wd}/config_files/fastq_files_array.txt
 
 
 # Extract the file name for the current $SLURM_ARRAY_TASK_ID
