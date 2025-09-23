@@ -19,6 +19,7 @@ module load bwa/0.7.17
 module load samtools/v1.9-4-deb_cv1
 
 wd=/90daydata/beenome100/rena_in_progress/${species}
+mkdir -p ${wd}/bam
 
 ref=/project/beenome100/nuc_genomes_NCBI_reference/GCF_024516045.1_iyBomAffi1.2_genomic.fna
 
